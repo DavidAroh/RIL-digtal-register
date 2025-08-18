@@ -1,9 +1,13 @@
-import emailjs from '@emailjs/browser';
+// lib/emailService.ts
+import emailjs from "@emailjs/browser";
 
-// EmailJS configuration - You need to replace these with your actual EmailJS credentials
-const EMAILJS_SERVICE_ID = "service_gzpjfl2";
-const EMAILJS_TEMPLATE_ID = 'your_template_id';
-const EMAILJS_PUBLIC_KEY = 'your_public_key';
+// ✅ EmailJS configuration
+const EMAILJS_SERVICE_ID =
+  process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || "service_gzpjfl2";
+const EMAILJS_TEMPLATE_ID =
+  process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID || "your_template_id";
+const EMAILJS_PUBLIC_KEY =
+  process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY || "your_public_key";
 
 export interface EmailData {
   to_email: string;
@@ -12,10 +16,13 @@ export interface EmailData {
   company_name?: string;
 }
 
+/**
+ * Send OTP Email using EmailJS
+ */
 export const sendOTPEmail = async (emailData: EmailData): Promise<boolean> => {
   try {
-    // Initialize EmailJS if not already done
-    if (typeof window !== 'undefined' && !emailjs.userId) {
+    // Initialize EmailJS only on client side
+    if (typeof window !== "undefined") {
       emailjs.init(EMAILJS_PUBLIC_KEY);
     }
 
@@ -23,7 +30,7 @@ export const sendOTPEmail = async (emailData: EmailData): Promise<boolean> => {
       to_email: emailData.to_email,
       to_name: emailData.to_name,
       otp_code: emailData.otp_code,
-      company_name: emailData.company_name || 'Your Company',
+      company_name: emailData.company_name || "Your Company",
       message: `Your OTP for office check-in is: ${emailData.otp_code}. This code is valid for today only.`,
     };
 
@@ -35,19 +42,24 @@ export const sendOTPEmail = async (emailData: EmailData): Promise<boolean> => {
 
     return result.status === 200;
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error("❌ Error sending email:", error);
     return false;
   }
 };
 
-// For demo purposes - simulate email sending
-export const simulateEmailSend = async (emailData: EmailData): Promise<boolean> => {
+/**
+ * Simulate OTP Email Sending (for development/testing)
+ */
+export const simulateEmailSend = async (
+  emailData: EmailData
+): Promise<boolean> => {
   return new Promise((resolve) => {
     setTimeout(() => {
-      console.log(`📧 OTP Email sent to ${emailData.to_email}:`);
+      console.log("📧 Simulated OTP Email:");
+      console.log(`   To: ${emailData.to_email}`);
       console.log(`   Name: ${emailData.to_name}`);
       console.log(`   OTP: ${emailData.otp_code}`);
-      console.log(`   Company: ${emailData.company_name || 'Your Company'}`);
+      console.log(`   Company: ${emailData.company_name || "Your Company"}`);
       resolve(true);
     }, 1000);
   });
