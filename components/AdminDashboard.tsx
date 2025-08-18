@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { useRealTimeUsers, useRealTimeCheckIns, useRealTimeStats } from '@/hooks/useRealTime';
 import { addUser, updateUser, deleteUser, generateOTP, User as UserType, CheckInRecord } from '@/lib/storage';
-// import { sendOTPEmail, simulateEmailSend } from '@/lib/emailService';
+import { sendOTPEmail, simulateEmailSend } from '@/lib/emailService';
 
 export default function AdminDashboard() {
   const users = useRealTimeUsers();
