@@ -45,7 +45,7 @@ import {
   generateOTP,
   User as UserType,
 } from "@/lib/storage";
-import { simulateEmailSend } from "@/lib/emailService";
+import { simulateEmailSend } from "../lib/emailService";
 import {
   Table,
   TableBody,
