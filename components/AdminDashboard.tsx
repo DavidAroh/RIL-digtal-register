@@ -117,7 +117,7 @@ export default function AdminDashboard() {
     const filtered = normalizedQuery
       ? base.filter(({ user }) => {
           const hay =
-            `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
+            `${user.name} ${user.email} ${user.department} ${user.positi}`.toLowerCase();
           return hay.includes(normalizedQuery);
         })
       : base;
