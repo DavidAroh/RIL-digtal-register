@@ -5,7 +5,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Office Digital Register - Secure OTP-based Attendance System',
+  title: 'Renaissance Innovation labs sign-in register',
   description: 'Modern office attendance management with OTP authentication, real-time tracking, and comprehensive admin dashboard.',
   keywords: 'office, attendance, OTP, check-in, digital register, employee management',
 };

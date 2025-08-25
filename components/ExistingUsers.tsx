@@ -28,7 +28,6 @@ import {
   Clock,
   RefreshCw,
   CheckCircle,
-  XCircle,
   Trash,
 } from "lucide-react";
 import {
@@ -44,8 +43,6 @@ import {
   CheckInRecord,
 } from "@/lib/storage";
 import { simulateEmailSend } from "@/lib/emailService";
-import { Link } from "react-router-dom";
-import ExistingUsers from "@/components/ExistingUsers";
 
 // Local types for stronger state typing
 type NewUserState = {
@@ -61,7 +58,7 @@ type MessageState = {
   text: string;
 };
 
-export default function AdminDashboard() {
+export default function ExistingUsers() {
   const users = useRealTimeUsers();
   const records = useRealTimeCheckIns();
   const stats = useRealTimeStats();
@@ -94,7 +91,8 @@ export default function AdminDashboard() {
   // Map of userId -> last record (today)
   const lastRecordByUser = useMemo(() => {
     const sorted = [...todayRecords].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     const map = new Map<string, CheckInRecord>();
     sorted.forEach((r) => map.set(r.userId, r));
@@ -104,7 +102,8 @@ export default function AdminDashboard() {
   // Set of present users based on today's events
   const presentUserIds = useMemo(() => {
     const sorted = [...todayRecords].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     const present = new Set<string>();
     sorted.forEach((r) => {
@@ -129,7 +128,8 @@ export default function AdminDashboard() {
 
     const filtered = normalizedQuery
       ? base.filter(({ user }) => {
-          const hay = `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
+          const hay =
+            `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
           return hay.includes(normalizedQuery);
         })
       : base;
@@ -190,10 +190,19 @@ export default function AdminDashboard() {
           type: "success",
           text: `User added successfully! OTP sent to ${user.email}`,
         });
-        setNewUser({ name: "", email: "", department: "", contact: "", position: "" });
+        setNewUser({
+          name: "",
+          email: "",
+          department: "",
+          contact: "",
+          position: "",
+        });
         setIsAddUserOpen(false);
       } else {
-        setMessage({ type: "error", text: "User added but failed to send OTP email" });
+        setMessage({
+          type: "error",
+          text: "User added but failed to send OTP email",
+        });
       }
     } catch (err) {
       setMessage({ type: "error", text: "Failed to add user" });
@@ -227,7 +236,11 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleToggleUserStatus = (userId: string, currentStatus: boolean, userName: string) => {
+  const handleToggleUserStatus = (
+    userId: string,
+    currentStatus: boolean,
+    userName: string
+  ) => {
     updateUser(userId, { isActive: !currentStatus });
     setMessage({
       type: "success",
@@ -241,13 +254,6 @@ export default function AdminDashboard() {
       return () => clearTimeout(timer);
     }
   }, [message]);
-
-    const [currentView, setCurrentView] = useState<'home' | 'Users' | 'user'>('home');
-  
-    if (currentView === 'Users') {
-      return <ExistingUsers />;
-    }
-  
 
   return (
     <div className="min-h-screen bg-white-50">
@@ -265,12 +271,6 @@ export default function AdminDashboard() {
 
             {/* Add user dialog */}
             <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-              <div className="relative left-[330px]">
-                <Button 
-                className="bg-blue-500 h-[46px] rounded-lg"
-                onClick={() => setCurrentView('Users')}
-                >Manage Existing Users</Button>
-              </div>
               <DialogTrigger asChild>
                 <Button className="bg-blue-50 hover:bg-blue-200 text-blue-500 w-[190px] h-[46px] text-[16px]">
                   Register New User
@@ -382,7 +382,14 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div className="mb-4 w-full h-[48px] rounded">
+        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <CardTitle>Daily Log</CardTitle>
+            <CardDescription>See who’s signed in today</CardDescription>
+          </div>
+        </CardHeader>
+
+        <div className="mb-4 w-l h-[48px] rounded">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -394,12 +401,6 @@ export default function AdminDashboard() {
 
         {/* Unified Users + Activity Table */}
         <Card className="border-none">
-          <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <CardTitle>Daily Log</CardTitle>
-              <CardDescription>See who’s signed in today</CardDescription>
-            </div>
-          </CardHeader>
           <CardContent>
             {users.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
@@ -421,7 +422,10 @@ export default function AdminDashboard() {
                       <th className="py-3 px-4 font-medium">Status</th>
                       <th className="py-3 px-4 font-medium">Today</th>
                       <th className="py-3 px-4 font-medium">Last Activity</th>
-                     
+                      <th className="py-3 px-4 font-medium">OTP</th>
+                      <th className="py-3 pl-4 font-medium text-right">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -472,7 +476,9 @@ export default function AdminDashboard() {
                             >
                               {isPresent ? (
                                 // <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                                <p className="text-sm text-green-600">In Office</p>
+                                <p className="text-sm text-green-600">
+                                  In Office
+                                </p>
                               ) : (
                                 // <XCircle className="w-3.5 h-3.5 text-red-600" />
                                 <p className="text-sm ">Complete</p>
@@ -496,8 +502,58 @@ export default function AdminDashboard() {
                                   lastRecord.action === "check-in"
                                     ? "In"
                                     : "Out"
-                                } ${formatTime(lastRecord.timestamp)}`
+                                } at ${formatTime(lastRecord.timestamp)}`
                               : "—"}
+                          </div>
+                        </td>
+
+                        {/* OTP */}
+                        <td className="py-3 px-4 align-middle">
+                          <div className="text-xs font-mono bg-gray-100 px-2 py-1 rounded inline-block">
+                            {user.otp}
+                          </div>
+                        </td>
+
+                        {/* Actions */}
+                        <td className="py-3 pl-4 align-middle">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRegenerateOTP(user)}
+                              disabled={isLoadingGlobal}
+                              aria-busy={isLoadingGlobal}
+                            >
+                              Generate OTP
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant={
+                                user.isActive ? "destructive" : "default"
+                              }
+                              onClick={() =>
+                                handleToggleUserStatus(
+                                  user.id,
+                                  user.isActive,
+                                  user.name
+                                )
+                              }
+                              aria-label={`${
+                                user.isActive ? "Deactivate" : "Activate"
+                              } ${user.name}`}
+                            >
+                              {user.isActive ? (
+                                <>
+                                  <Trash className="w-4 h-4" />
+                                  <span className="sr-only">Deactivate</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4" />
+                                  <span className="sr-only">Activate</span>
+                                </>
+                              )}
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -514,65 +570,6 @@ export default function AdminDashboard() {
             )}
           </CardContent>
         </Card>
-
-         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalUsers}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.activeUsers} active
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Today's Check-ins
-              </CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.todayCheckIns}</div>
-              <p className="text-xs text-muted-foreground">Total for today</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Currently In Office
-              </CardTitle>
-              <Clock className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {stats.currentlyInOffice}
-              </div>
-              <p className="text-xs text-muted-foreground">Present now</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Active Users
-              </CardTitle>
-              <CheckCircle className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
-                {stats.activeUsers}
-              </div>
-              <p className="text-xs text-muted-foreground">Can check in</p>
-            </CardContent>
-          </Card>
-        </div> 
       </div>
     </div>
   );
