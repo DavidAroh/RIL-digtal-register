@@ -21,15 +21,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Users,
-  UserPlus,
-  Activity,
-  Clock,
-  RefreshCw,
-  CheckCircle,
-  Trash,
-} from "lucide-react";
+import { UserPlus, RefreshCw, CheckCircle, Trash, Edit } from "lucide-react";
 import {
   useRealTimeUsers,
   useRealTimeCheckIns,
@@ -44,7 +36,7 @@ import {
 } from "@/lib/storage";
 import { simulateEmailSend } from "@/lib/emailService";
 
-// Local types for stronger state typing
+// Local types
 type NewUserState = {
   name: string;
   email: string;
@@ -61,7 +53,7 @@ type MessageState = {
 export default function ExistingUsers() {
   const users = useRealTimeUsers();
   const records = useRealTimeCheckIns();
-  const stats = useRealTimeStats();
+  useRealTimeStats();
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState<NewUserState>({
@@ -74,13 +66,14 @@ export default function ExistingUsers() {
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [message, setMessage] = useState<MessageState>({ type: "", text: "" });
   const [query, setQuery] = useState("");
+  const [otpDisplay, setOtpDisplay] = useState<{ [userId: string]: string }>({});
+  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
-  const formatTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString("en-US", {
+  const formatTime = (timestamp: string) =>
+    new Date(timestamp).toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
 
   const today = useMemo(() => new Date().toISOString().split("T")[0], []);
   const todayRecords = useMemo(
@@ -88,7 +81,6 @@ export default function ExistingUsers() {
     [records, today]
   );
 
-  // Map of userId -> last record (today)
   const lastRecordByUser = useMemo(() => {
     const sorted = [...todayRecords].sort(
       (a, b) =>
@@ -99,7 +91,6 @@ export default function ExistingUsers() {
     return map;
   }, [todayRecords]);
 
-  // Set of present users based on today's events
   const presentUserIds = useMemo(() => {
     const sorted = [...todayRecords].sort(
       (a, b) =>
@@ -113,28 +104,21 @@ export default function ExistingUsers() {
     return present;
   }, [todayRecords]);
 
-  // Merge user list with derived presence/activity data
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     const base = users.map((u) => {
       const last = lastRecordByUser.get(u.id);
       const isPresent = presentUserIds.has(u.id);
-      return {
-        user: u,
-        isPresent,
-        lastRecord: last,
-      };
+      return { user: u, isPresent, lastRecord: last };
     });
 
     const filtered = normalizedQuery
       ? base.filter(({ user }) => {
-          const hay =
-            `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
+          const hay = `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
           return hay.includes(normalizedQuery);
         })
       : base;
 
-    // Sort: present first, then active, then by name
     return filtered.sort((a, b) => {
       if (a.isPresent !== b.isPresent) return a.isPresent ? -1 : 1;
       if (a.user.isActive !== b.user.isActive) return a.user.isActive ? -1 : 1;
@@ -155,7 +139,6 @@ export default function ExistingUsers() {
       setMessage({ type: "error", text: "Please fill in all required fields" });
       return;
     }
-
     if (!emailLooksValid(newUser.email)) {
       setMessage({ type: "error", text: "Enter a valid email address" });
       return;
@@ -163,7 +146,7 @@ export default function ExistingUsers() {
 
     setIsLoadingGlobal(true);
     try {
-      const trimmed: NewUserState = {
+      const trimmed = {
         name: newUser.name.trim(),
         email: newUser.email.trim(),
         department: newUser.department.trim(),
@@ -172,11 +155,7 @@ export default function ExistingUsers() {
       };
 
       const otp = generateOTP();
-      const user = addUser({
-        ...trimmed,
-        otp,
-        isActive: true,
-      });
+      const user = addUser({ ...trimmed, otp, isActive: true });
 
       const emailSent = await simulateEmailSend({
         to_email: user.email,
@@ -204,7 +183,7 @@ export default function ExistingUsers() {
           text: "User added but failed to send OTP email",
         });
       }
-    } catch (err) {
+    } catch {
       setMessage({ type: "error", text: "Failed to add user" });
     } finally {
       setIsLoadingGlobal(false);
@@ -216,6 +195,12 @@ export default function ExistingUsers() {
     try {
       const newOTP = generateOTP();
       updateUser(user.id, { otp: newOTP });
+      setOtpDisplay((prev) => ({ ...prev, [user.id]: newOTP }));
+
+      // ✅ Copy OTP to clipboard immediately
+      await navigator.clipboard.writeText(newOTP);
+      setCopiedUserId(user.id);
+      setTimeout(() => setCopiedUserId(null), 2000);
 
       const emailSent = await simulateEmailSend({
         to_email: user.email,
@@ -229,7 +214,7 @@ export default function ExistingUsers() {
       } else {
         setMessage({ type: "error", text: "Failed to send OTP email" });
       }
-    } catch (err) {
+    } catch {
       setMessage({ type: "error", text: "Failed to regenerate OTP" });
     } finally {
       setIsLoadingGlobal(false);
@@ -256,140 +241,125 @@ export default function ExistingUsers() {
   }, [message]);
 
   return (
-    <div className="min-h-screen bg-white-50">
+    <div className="min-h-screen bg-white">
       <div className="container mx-auto p-6">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <img
-                src="/RIL logo.svg"
-                alt="Company Logo"
-                className="w-medium mb-2"
-              />
-            </div>
+        <div className="mb-8 flex items-center justify-between">
+          <img src="/RIL logo.svg" alt="Company Logo" className="w-medium" />
 
-            {/* Add user dialog */}
-            <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-blue-50 hover:bg-blue-200 text-blue-500 w-[190px] h-[46px] text-[16px]">
-                  Register New User
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Register New User</DialogTitle>
-                  <DialogDescription>
-                    Create a new user account and send OTP via email
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input
-                      id="name"
-                      value={newUser.name}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, name: e.target.value })
-                      }
-                      placeholder="John Doe"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={newUser.email}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, email: e.target.value })
-                      }
-                      placeholder="john@company.com"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="contact">Contact No</Label>
-                    <Input
-                      id="contact"
-                      value={newUser.contact}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, contact: e.target.value })
-                      }
-                      placeholder="Enter phone number"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="department">Role</Label>
-                    <Input
-                      id="department"
-                      value={newUser.department}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, department: e.target.value })
-                      }
-                      placeholder="Select role"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="position">Position</Label>
-                    <Input
-                      id="position"
-                      value={newUser.position}
-                      onChange={(e) =>
-                        setNewUser({ ...newUser, position: e.target.value })
-                      }
-                      placeholder="e.g. Programs Manager, Visitor"
-                    />
-                  </div>
-                  <Button
-                    onClick={handleAddUser}
-                    className="w-full"
-                    disabled={isLoadingGlobal || !isFormValid}
-                    aria-busy={isLoadingGlobal}
-                  >
-                    {isLoadingGlobal ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        Creating User...
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        Register User & Send OTP
-                      </>
-                    )}
-                  </Button>
+          <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-50 hover:bg-blue-200 text-blue-500 w-[190px] h-[46px] text-[16px]">
+                Register New User
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Register New User</DialogTitle>
+                <DialogDescription>
+                  Create a new user account and send OTP via email
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Full Name</Label>
+                  <Input
+                    id="name"
+                    value={newUser.name}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, name: e.target.value })
+                    }
+                    placeholder="John Doe"
+                  />
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {message.text && (
-            <Alert
-              className={`mt-4 ${
-                message.type === "error"
-                  ? "border-red-200 bg-red-50"
-                  : "border-green-200 bg-green-50"
-              }`}
-            >
-              <AlertDescription
-                className={
-                  message.type === "error" ? "text-red-800" : "text-green-800"
-                }
-              >
-                {message.text}
-              </AlertDescription>
-            </Alert>
-          )}
+                <div>
+                  <Label htmlFor="email">Email Address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, email: e.target.value })
+                    }
+                    placeholder="john@company.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="contact">Contact No</Label>
+                  <Input
+                    id="contact"
+                    value={newUser.contact}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, contact: e.target.value })
+                    }
+                    placeholder="Enter phone number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="department">Role</Label>
+                  <Input
+                    id="department"
+                    value={newUser.department}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, department: e.target.value })
+                    }
+                    placeholder="Select role"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="position">Position</Label>
+                  <Input
+                    id="position"
+                    value={newUser.position}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, position: e.target.value })
+                    }
+                    placeholder="e.g. Programs Manager, Visitor"
+                  />
+                </div>
+                <Button
+                  onClick={handleAddUser}
+                  className="w-full"
+                  disabled={isLoadingGlobal || !isFormValid}
+                  aria-busy={isLoadingGlobal}
+                >
+                  {isLoadingGlobal ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Creating User...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Register User & Send OTP
+                    </>
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <CardTitle>Daily Log</CardTitle>
-            <CardDescription>See who’s signed in today</CardDescription>
-          </div>
-        </CardHeader>
+        {message.text && (
+          <Alert
+            className={`mb-6 ${
+              message.type === "error"
+                ? "border-red-200 bg-red-50"
+                : "border-green-200 bg-green-50"
+            }`}
+          >
+            <AlertDescription
+              className={
+                message.type === "error" ? "text-red-800" : "text-green-800"
+              }
+            >
+              {message.text}
+            </AlertDescription>
+          </Alert>
+        )}
 
-        <div className="mb-4 w-l h-[48px] rounded">
+        {/* Search */}
+        <div className="mb-4 w-full h-[48px] rounded">
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -399,177 +369,96 @@ export default function ExistingUsers() {
           />
         </div>
 
-        {/* Unified Users + Activity Table */}
-        <Card className="border-none">
-          <CardContent>
-            {users.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <img
-                  src="/Social 02.svg"
-                  alt="Empty state"
-                  className="mx-auto mb-3"
-                />
-                No users registered yet
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full table-auto border-collapse">
-                  <thead>
-                    <tr className="text-left text-sm text-muted-foreground border-b">
-                      <th className="py-3 pr-4 font-medium">User</th>
-                      <th className="py-3 px-4 font-medium">Email</th>
-                      <th className="py-3 px-4 font-medium">Role</th>
-                      <th className="py-3 px-4 font-medium">Status</th>
-                      <th className="py-3 px-4 font-medium">Today</th>
-                      <th className="py-3 px-4 font-medium">Last Activity</th>
-                      <th className="py-3 px-4 font-medium">OTP</th>
-                      <th className="py-3 pl-4 font-medium text-right">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map(({ user, isPresent, lastRecord }) => (
-                      <tr
-                        key={user.id}
-                        className={`border-b hover:bg-muted/30 transition`}
-                      >
-                        {/* User */}
-                        <td className="py-3 pr-4">
-                          <div className="flex items-center space-x-3">
-                            <div>
-                              <div className="font-medium leading-5">
-                                {user.name}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Email */}
-                        <td className="py-3 px-4 align-middle">
-                          <div className="text-sm">{user.email}</div>
-                        </td>
-
-                        {/* Role / Department */}
-                        <td className="py-3 px-4 align-middle">
-                          <div className="text-sm text-gray-700">
-                            {user.department || "—"}
-                          </div>
-                        </td>
-
-                        {/* Active status */}
-                        <td className="py-3 px-4 align-middle">
-                          <Badge
-                            variant={user.isActive ? "default" : "secondary"}
-                          >
-                            {user.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </td>
-
-                        {/* Today presence */}
-                        <td className="py-3 px-4 align-middle">
-                          <div className="flex items-center space-x-2">
-                            <div
-                              className={`w-6 h-6 rounded-full flex items-center justify-center ${
-                                isPresent ? "" : ""
-                              }`}
-                            >
-                              {isPresent ? (
-                                // <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                                <p className="text-sm text-green-600">
-                                  In Office
-                                </p>
-                              ) : (
-                                // <XCircle className="w-3.5 h-3.5 text-red-600" />
-                                <p className="text-sm ">Complete</p>
-                              )}
-                            </div>
-                            <span className="text-sm">
-                              {/* {isPresent
-                                ? "In Office"
-                                : lastRecord
-                                ? "Complete"
-                                : "No activity"} */}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Last activity */}
-                        <td className="py-3 px-4 align-middle">
-                          <div className="text-sm text-gray-600">
-                            {lastRecord
-                              ? `${
-                                  lastRecord.action === "check-in"
-                                    ? "In"
-                                    : "Out"
-                                } at ${formatTime(lastRecord.timestamp)}`
-                              : "—"}
-                          </div>
-                        </td>
-
-                        {/* OTP */}
-                        <td className="py-3 px-4 align-middle">
-                          <div className="text-xs font-mono bg-gray-100 px-2 py-1 rounded inline-block">
-                            {user.otp}
-                          </div>
-                        </td>
-
-                        {/* Actions */}
-                        <td className="py-3 pl-4 align-middle">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleRegenerateOTP(user)}
-                              disabled={isLoadingGlobal}
-                              aria-busy={isLoadingGlobal}
-                            >
-                              Generate OTP
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant={
-                                user.isActive ? "destructive" : "default"
-                              }
-                              onClick={() =>
-                                handleToggleUserStatus(
-                                  user.id,
-                                  user.isActive,
-                                  user.name
-                                )
-                              }
-                              aria-label={`${
-                                user.isActive ? "Deactivate" : "Activate"
-                              } ${user.name}`}
-                            >
-                              {user.isActive ? (
-                                <>
-                                  <Trash className="w-4 h-4" />
-                                  <span className="sr-only">Deactivate</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle className="w-4 h-4" />
-                                  <span className="sr-only">Activate</span>
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-
-                {rows.length === 0 && (
-                  <div className="text-center py-10 text-gray-500">
-                    No users match your search
+        {/* User Profile Cards */}
+        <div className="space-y-4">
+          {rows.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <img
+                src="/Social 02.svg"
+                alt="Empty state"
+                className="mx-auto mb-3"
+              />
+              No users registered yet
+            </div>
+          ) : (
+            rows.map(({ user, isPresent }) => (
+              <Card
+                key={user.id}
+                className="flex items-center justify-between p-7 transition rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  {/* Avatar with initials */}
+                  <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl">
+                    {user.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)}
                   </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <div>
+                    <p className="font-semibold">{user.name}</p>
+                    <p className="text-blue-500 text-sm">{user.position}</p>
+                    <p className="text-gray-500 text-xs">{user.email}</p>
+                  </div>
+                </div>
+
+                <div className="gap-28 grid grid-cols-3 text-sm">
+                  <p className="text-center">
+                    <span className="font-bold">Contact No</span>{" "} 
+                    <br/>
+                    {user.contact || "—"}
+                  </p>
+                  <p className="text-center">
+                    <span className="font-bold">Role</span>{" "}
+                    <br/>
+                    {user.department || "—"}
+                  </p>
+                  <p className="text-center">
+                    <span className="font-bold">Status</span>{" "} 
+                    <br/>
+                    {isPresent ? (
+                      <span className="text-green-600">In Office</span>
+                    ) : (
+                      <span className="text-gray-500">Complete</span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="lg"
+                    className="bg-blue-500 text-white hover:bg-blue-600"
+                    onClick={() => handleRegenerateOTP(user)}
+                    disabled={isLoadingGlobal}
+                  >
+                    {otpDisplay[user.id]
+                      ? copiedUserId === user.id
+                        ? `✅ ${otpDisplay[user.id]} Copied!`
+                        : otpDisplay[user.id]
+                      : "Generate OTP"}
+                  </Button>
+                  <Button size="icon" variant="ghost">
+                    <Edit className="w-4 h-4 text-gray-500" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() =>
+                      handleToggleUserStatus(user.id, user.isActive, user.name)
+                    }
+                  >
+                    {user.isActive ? (
+                      <Trash className="w-4 h-4 text-red-500" />
+                    ) : (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    )}
+                  </Button>
+                </div>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
