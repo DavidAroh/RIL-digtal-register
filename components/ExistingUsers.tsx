@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -21,7 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { UserPlus, RefreshCw, CheckCircle, Trash, Edit } from "lucide-react";
+import { UserPlus, RefreshCw, CheckCircle, Trash, Edit, ArrowLeft } from "lucide-react";
 import {
   useRealTimeUsers,
   useRealTimeCheckIns,
@@ -35,6 +36,7 @@ import {
   CheckInRecord,
 } from "@/lib/storage";
 import { simulateEmailSend } from "@/lib/emailService";
+import AdminDashboard from '@/components/AdminDashboard';
 
 // Local types
 type NewUserState = {
@@ -54,6 +56,7 @@ export default function ExistingUsers() {
   const users = useRealTimeUsers();
   const records = useRealTimeCheckIns();
   useRealTimeStats();
+  const router = useRouter();
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState<NewUserState>({
@@ -114,9 +117,9 @@ export default function ExistingUsers() {
 
     const filtered = normalizedQuery
       ? base.filter(({ user }) => {
-          const hay = `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
-          return hay.includes(normalizedQuery);
-        })
+        // const hay = `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
+        // return hay.includes(normalizedQuery);
+      })
       : base;
 
     return filtered.sort((a, b) => {
@@ -240,6 +243,13 @@ export default function ExistingUsers() {
     }
   }, [message]);
 
+  const [currentView, setCurrentView] = useState<'home' | 'Users' | 'user'>('home');
+
+  if (currentView === 'Users') {
+    return <AdminDashboard />;
+  }
+
+
   return (
     <div className="min-h-screen bg-white">
       <div className="container mx-auto p-6">
@@ -342,11 +352,10 @@ export default function ExistingUsers() {
 
         {message.text && (
           <Alert
-            className={`mb-6 ${
-              message.type === "error"
-                ? "border-red-200 bg-red-50"
-                : "border-green-200 bg-green-50"
-            }`}
+            className={`mb-6 ${message.type === "error"
+              ? "border-red-200 bg-red-50"
+              : "border-green-200 bg-green-50"
+              }`}
           >
             <AlertDescription
               className={
@@ -357,6 +366,17 @@ export default function ExistingUsers() {
             </AlertDescription>
           </Alert>
         )}
+
+        <div className="mb-4">
+          <Button
+            variant="ghost"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            onClick={() => setCurrentView('Users')}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+        </div>
 
         {/* Search */}
         <div className="mb-4 w-full h-[48px] rounded">
@@ -405,18 +425,18 @@ export default function ExistingUsers() {
 
                 <div className="gap-28 grid grid-cols-3 text-sm">
                   <p className="text-center">
-                    <span className="font-bold">Contact No</span>{" "} 
-                    <br/>
+                    <span className="font-bold">Contact No</span>{" "}
+                    <br />
                     {user.contact || "—"}
                   </p>
                   <p className="text-center">
                     <span className="font-bold">Role</span>{" "}
-                    <br/>
+                    <br />
                     {user.department || "—"}
                   </p>
                   <p className="text-center">
-                    <span className="font-bold">Status</span>{" "} 
-                    <br/>
+                    <span className="font-bold">Status</span>{" "}
+                    <br />
                     {isPresent ? (
                       <span className="text-green-600">In Office</span>
                     ) : (
@@ -434,7 +454,7 @@ export default function ExistingUsers() {
                   >
                     {otpDisplay[user.id]
                       ? copiedUserId === user.id
-                        ? `✅ ${otpDisplay[user.id]} Copied!`
+                        ? `${otpDisplay[user.id]}Copied!`
                         : otpDisplay[user.id]
                       : "Generate OTP"}
                   </Button>
