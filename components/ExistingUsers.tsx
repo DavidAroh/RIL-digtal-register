@@ -294,7 +294,6 @@ export default function ExistingUsers() {
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
             <DialogTrigger asChild>
               <Button className="bg-blue-50 hover:bg-blue-200 text-blue-500 w-[190px] h-[46px] text-[16px]">
-                <UserPlus className="w-4 h-4 mr-2" />
                 Register New User
               </Button>
             </DialogTrigger>
@@ -463,7 +462,7 @@ export default function ExistingUsers() {
                 // List View - Horizontal Layout
                 <Card
                   key={user.id}
-                  className="flex items-center justify-between p-7 transition rounded-lg hover:shadow-md"
+                  className="flex items-center justify-between p-7 transition rounded-lg"
                 >
                   <div className="flex items-center gap-3">
                     {/* Avatar with initials */}
@@ -494,13 +493,13 @@ export default function ExistingUsers() {
                     <div className="text-center">
                       <p className="font-bold mb-1">Status</p>
                       {isPresent ? (
-                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                        <div className="text-green-600">
                           In Office
-                        </Badge>
+                        </div>
                       ) : (
-                        <Badge variant="secondary" className="bg-gray-100 text-gray-600">
-                          Not In Office
-                        </Badge>
+                        <div>
+                          —
+                        </div>
                       )}
                     </div>
                   </div>
@@ -573,13 +572,13 @@ export default function ExistingUsers() {
                       {/* Status Badge */}
                       <div className="mb-4">
                         {isPresent ? (
-                          <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          <div className="text-green-600">
                             In Office
-                          </Badge>
+                          </div>
                         ) : (
-                          <Badge variant="secondary" className="bg-gray-100 text-gray-600">
-                            Not In Office
-                          </Badge>
+                          <div>
+                            —
+                          </div>
                         )}
                       </div>
                     </div>
