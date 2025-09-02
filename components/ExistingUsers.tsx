@@ -283,12 +283,10 @@ export default function ExistingUsers() {
       <div className="container mx-auto p-6">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <Image 
+          <img
             src="/RIL logo.svg" 
             alt="Company Logo" 
-            width={200} 
-            height={50}
-            className="w-auto h-12"
+            className="w-medium"
           />
 
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>

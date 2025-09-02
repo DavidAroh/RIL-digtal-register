@@ -62,6 +62,8 @@ type MessageState = {
 };
 
 export default function AdminDashboard() {
+  const [logs, setLogs] = useState<SecurityLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const users = useRealTimeUsers();
   const records = useRealTimeCheckIns();
   const stats = useRealTimeStats();
@@ -88,7 +90,8 @@ export default function AdminDashboard() {
 
   const lastRecordByUser = useMemo(() => {
     const sorted = [...todayRecords].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     const map = new Map<string, CheckInRecord>();
     sorted.forEach((r) => map.set(r.userId, r));
@@ -97,7 +100,8 @@ export default function AdminDashboard() {
 
   const presentUserIds = useMemo(() => {
     const sorted = [...todayRecords].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      (a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     const present = new Set<string>();
     sorted.forEach((r) => {
@@ -117,9 +121,10 @@ export default function AdminDashboard() {
 
     const filtered = normalizedQuery
       ? base.filter(({ user }) => {
-        const hay = `${user.name} ${user.email} ${user.department}`.toLowerCase();
-        return hay.includes(normalizedQuery);
-      })
+          const hay =
+            `${user.name} ${user.email} ${user.department}`.toLowerCase();
+          return hay.includes(normalizedQuery);
+        })
       : base;
 
     return filtered.sort((a, b) => {
@@ -188,6 +193,10 @@ export default function AdminDashboard() {
       setIsLoadingGlobal(false);
     }
   };
+
+  const filteredLogs = logs.filter((log) =>
+    log.email.toLowerCase().includes(query.toLowerCase())
+  );
 
   useEffect(() => {
     if (message.text) {
@@ -306,73 +315,109 @@ export default function AdminDashboard() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse">
-                <thead>
-                  <tr className="text-sm text-foreground border-b">
-                    <th className="py-3 px-4 text-left">S/N</th>
-                    <th className="py-3 px-4 text-left">Name</th>
-                    <th className="py-3 px-4 text-left">Email Address</th>
-                    <th className="py-3 px-4 text-left">Role</th>
-                    <th className="py-3 px-4 text-left">Sign In Time</th>
-                    <th className="py-3 px-4 text-left">Sign Out Time</th>
-                    <th className="py-3 px-4 text-left">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map(({ user, isPresent, lastRecord }, idx) => (
-                    <tr key={user.id} className="border-b">
-                      <td className="py-3 px-4 text-gray-400 ">{idx + 1}</td>
-                      <td className="py-3 px-4">{user.name}</td>
-                      <td className="py-3 px-4">{user.email}</td>
-                      <td className="py-3 px-4">{user.department}</td>
-                      <td className="py-3 px-4">
-                        {lastRecord?.action === "check-in"
-                          ? new Date(
-                            lastRecord.timestamp
-                          ).toLocaleTimeString("en-US", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                          : "—"}
-                      </td>
-                      <td className="py-3 px-4">
-                        {lastRecord?.action === "check-out"
-                          ? new Date(
-                            lastRecord.timestamp
-                          ).toLocaleTimeString("en-US", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                          : "—"}
-                      </td>
-                      <td className="py-3 px-4">
-                        {isPresent ? (
-                          <span className="text-green-600">In Office</span>
-                        ) : lastRecord ? (
-                          "Complete"
-                        ) : (
-                          "—"
-                        )}
-                      </td>
+          {users.length > 0 ? (
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse">
+                  <thead>
+                    <tr className="text-sm text-foreground border-b">
+                      <th className="py-3 px-4 text-left">S/N</th>
+                      <th className="py-3 px-4 text-left">Name</th>
+                      <th className="py-3 px-4 text-left">Email Address</th>
+                      <th className="py-3 px-4 text-left">Role</th>
+                      <th className="py-3 px-4 text-left">Sign In Time</th>
+                      <th className="py-3 px-4 text-left">Sign Out Time</th>
+                      <th className="py-3 px-4 text-left">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ user, isPresent, lastRecord }, idx) => (
+                      <tr key={user.id} className="border-b">
+                        <td className="py-3 px-4 text-gray-400 ">{idx + 1}</td>
+                        <td className="py-3 px-4">{user.name}</td>
+                        <td className="py-3 px-4">{user.email}</td>
+                        <td className="py-3 px-4">{user.department}</td>
+                        <td className="py-3 px-4">
+                          {lastRecord?.action === "check-in"
+                            ? new Date(lastRecord.timestamp).toLocaleTimeString(
+                                "en-US",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )
+                            : "—"}
+                        </td>
+                        <td className="py-3 px-4">
+                          {lastRecord?.action === "check-out"
+                            ? new Date(lastRecord.timestamp).toLocaleTimeString(
+                                "en-US",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )
+                            : "—"}
+                        </td>
+                        <td className="py-3 px-4">
+                          {isPresent ? (
+                            <span className="text-green-600">In Office</span>
+                          ) : lastRecord ? (
+                            "Complete"
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          ) : (
+            <CardContent>
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                <div className="flex flex-col items-center gap-3">
+                  <img src="/Social 02.svg" alt="No users registered yet." />
+                  <div>Looks like no one has signed in yet</div>
+                </div>
+              </div>
+            </CardContent>
+          )}
+
+          <div className="flex justify-between items-center mt-4 text-sm text-gray-500">
+            <span>
+              Showing {filteredLogs.length} of {logs.length}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm">
+                1
+              </Button>
+              <Button variant="outline" size="sm">
+                2
+              </Button>
+              <Button variant="outline" size="sm">
+                3
+              </Button>
+              <span className="px-2">…</span>
+              <Button variant="outline" size="sm">
+                Next ›
+              </Button>
             </div>
-          </CardContent>
+          </div>
         </Card>
 
         {/* More Options */}
         <div className="mt-8 bg-">
           <h2 className="text-sm font-medium mb-2">More Options</h2>
           <div className="rounded-lg bg-blue-50 p-2">
-              <Button variant="ghost" className="text-blue-600 p-0 ml-2"
+            <Button
+              variant="ghost"
+              className="text-blue-600 p-0 ml-2"
               onClick={() => setLastView("Logs")}
-              >
-                Security Logs
-              </Button>
+            >
+              Security Logs
+            </Button>
             <p className="text-sm text-foreground ml-2 relative bottom-2 ">
               View Invalid OTP attempts
             </p>
