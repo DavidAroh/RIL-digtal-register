@@ -62,7 +62,7 @@ type MessageState = {
 };
 
 export default function AdminDashboard() {
-  const [logs, setLogs] = useState<SecurityLog[]>([]);
+  const [logs, setLogs] = useState<NewUserState[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const users = useRealTimeUsers();
   const records = useRealTimeCheckIns();
