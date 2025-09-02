@@ -37,6 +37,7 @@ import {
 } from "@/lib/storage";
 import { simulateEmailSend } from "@/lib/emailService";
 import AdminDashboard from '@/components/AdminDashboard';
+import Image from "next/image";
 
 // Local types
 type NewUserState = {
@@ -115,11 +116,12 @@ export default function ExistingUsers() {
       return { user: u, isPresent, lastRecord: last };
     });
 
+    // Fixed: Re-enabled search functionality
     const filtered = normalizedQuery
       ? base.filter(({ user }) => {
-        // const hay = `${user.name} ${user.email} ${user.department} ${user.position}`.toLowerCase();
-        // return hay.includes(normalizedQuery);
-      })
+          const searchText = `${user.name} ${user.email} ${user.department} ${(user as any).position || ''}`.toLowerCase();
+          return searchText.includes(normalizedQuery);
+        })
       : base;
 
     return filtered.sort((a, b) => {
@@ -158,7 +160,16 @@ export default function ExistingUsers() {
       };
 
       const otp = generateOTP();
-      const user = addUser({ ...trimmed, otp, isActive: true });
+      const user = addUser({ 
+        name: trimmed.name,
+        email: trimmed.email,
+        department: trimmed.department,
+        otp, 
+        isActive: true,
+        // Add extra properties that might not be in the User type
+        ...(trimmed.contact && { contact: trimmed.contact }),
+        ...(trimmed.position && { position: trimmed.position })
+      } as any);
 
       const emailSent = await simulateEmailSend({
         to_email: user.email,
@@ -186,7 +197,8 @@ export default function ExistingUsers() {
           text: "User added but failed to send OTP email",
         });
       }
-    } catch {
+    } catch (error) {
+      console.error("Error adding user:", error);
       setMessage({ type: "error", text: "Failed to add user" });
     } finally {
       setIsLoadingGlobal(false);
@@ -200,10 +212,17 @@ export default function ExistingUsers() {
       updateUser(user.id, { otp: newOTP });
       setOtpDisplay((prev) => ({ ...prev, [user.id]: newOTP }));
 
-      // ✅ Copy OTP to clipboard immediately
-      await navigator.clipboard.writeText(newOTP);
-      setCopiedUserId(user.id);
-      setTimeout(() => setCopiedUserId(null), 2000);
+      // Fixed: Add clipboard API check and error handling
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(newOTP);
+          setCopiedUserId(user.id);
+          setTimeout(() => setCopiedUserId(null), 2000);
+        }
+      } catch (clipboardError) {
+        console.warn("Failed to copy to clipboard:", clipboardError);
+        // Continue without clipboard functionality
+      }
 
       const emailSent = await simulateEmailSend({
         to_email: user.email,
@@ -217,7 +236,8 @@ export default function ExistingUsers() {
       } else {
         setMessage({ type: "error", text: "Failed to send OTP email" });
       }
-    } catch {
+    } catch (error) {
+      console.error("Error regenerating OTP:", error);
       setMessage({ type: "error", text: "Failed to regenerate OTP" });
     } finally {
       setIsLoadingGlobal(false);
@@ -229,11 +249,19 @@ export default function ExistingUsers() {
     currentStatus: boolean,
     userName: string
   ) => {
-    updateUser(userId, { isActive: !currentStatus });
-    setMessage({
-      type: "success",
-      text: `User ${currentStatus ? "deactivated" : "activated"} successfully`,
-    });
+    try {
+      updateUser(userId, { isActive: !currentStatus });
+      setMessage({
+        type: "success",
+        text: `${userName} ${currentStatus ? "deactivated" : "activated"} successfully`,
+      });
+    } catch (error) {
+      console.error("Error toggling user status:", error);
+      setMessage({
+        type: "error",
+        text: "Failed to update user status",
+      });
+    }
   };
 
   useEffect(() => {
@@ -249,13 +277,16 @@ export default function ExistingUsers() {
     return <AdminDashboard />;
   }
 
-
   return (
     <div className="min-h-screen bg-white">
       <div className="container mx-auto p-6">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <img src="/RIL logo.svg" alt="Company Logo" className="w-medium" />
+          <img
+            src="/RIL logo.svg" 
+            alt="Company Logo" 
+            className="w-medium"
+          />
 
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
             <DialogTrigger asChild>
@@ -272,7 +303,7 @@ export default function ExistingUsers() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="name">Full Name *</Label>
                   <Input
                     id="name"
                     value={newUser.name}
@@ -283,7 +314,7 @@ export default function ExistingUsers() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="email">Email Address</Label>
+                  <Label htmlFor="email">Email Address *</Label>
                   <Input
                     id="email"
                     type="email"
@@ -306,7 +337,7 @@ export default function ExistingUsers() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="department">Role</Label>
+                  <Label htmlFor="department">Role *</Label>
                   <Input
                     id="department"
                     value={newUser.department}
@@ -393,12 +424,14 @@ export default function ExistingUsers() {
         <div className="space-y-4">
           {rows.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
-              <img
+              <Image
                 src="/Social 02.svg"
                 alt="Empty state"
+                width={100}
+                height={100}
                 className="mx-auto mb-3"
               />
-              No users registered yet
+              <p>{query ? "No users found matching your search" : "No users registered yet"}</p>
             </div>
           ) : (
             rows.map(({ user, isPresent }) => (
@@ -408,7 +441,7 @@ export default function ExistingUsers() {
               >
                 <div className="flex items-center gap-3">
                   {/* Avatar with initials */}
-                  <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl">
+                  <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
                     {user.name
                       .split(" ")
                       .map((n) => n[0])
@@ -417,32 +450,33 @@ export default function ExistingUsers() {
                       .slice(0, 2)}
                   </div>
                   <div>
-                    <p className="font-semibold">{user.name}</p>
-                    <p className="text-blue-500 text-sm">{user.position}</p>
+                    <p className="font-semibold text-lg">{user.name}</p>
+                    <p className="text-blue-500 text-sm">{(user as any).position || "No position"}</p>
                     <p className="text-gray-500 text-xs">{user.email}</p>
                   </div>
                 </div>
 
                 <div className="gap-28 grid grid-cols-3 text-sm">
-                  <p className="text-center">
-                    <span className="font-bold">Contact No</span>{" "}
-                    <br />
-                    {user.contact || "—"}
-                  </p>
-                  <p className="text-center">
-                    <span className="font-bold">Role</span>{" "}
-                    <br />
-                    {user.department || "—"}
-                  </p>
-                  <p className="text-center">
-                    <span className="font-bold">Status</span>{" "}
-                    <br />
+                  <div className="text-center">
+                    <p className="font-bold mb-1">Contact No</p>
+                    <p>{(user as any).contact || "—"}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold mb-1">Role</p>
+                    <p>{user.department || "—"}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold mb-1">Status</p>
                     {isPresent ? (
-                      <span className="text-green-600">In Office</span>
+                      <div className="text-green-800">
+                        In Office
+                      </div>
                     ) : (
-                      <span className="text-gray-500">Complete</span>
+                      <div>
+                        —
+                      </div>
                     )}
-                  </p>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -452,13 +486,21 @@ export default function ExistingUsers() {
                     onClick={() => handleRegenerateOTP(user)}
                     disabled={isLoadingGlobal}
                   >
-                    {otpDisplay[user.id]
-                      ? copiedUserId === user.id
-                        ? `${otpDisplay[user.id]}Copied!`
-                        : otpDisplay[user.id]
-                      : "Generate OTP"}
+                    {otpDisplay[user.id] ? (
+                      copiedUserId === user.id ? (
+                        <>
+                          Copied!
+                        </>
+                      ) : (
+                        `OTP: ${otpDisplay[user.id]}`
+                      )
+                    ) : (
+                      <>
+                        Generate OTP
+                      </>
+                    )}
                   </Button>
-                  <Button size="icon" variant="ghost">
+                  <Button size="icon" variant="ghost" title="Edit user">
                     <Edit className="w-4 h-4 text-gray-500" />
                   </Button>
                   <Button
@@ -467,6 +509,7 @@ export default function ExistingUsers() {
                     onClick={() =>
                       handleToggleUserStatus(user.id, user.isActive, user.name)
                     }
+                    title={user.isActive ? "Deactivate user" : "Activate user"}
                   >
                     {user.isActive ? (
                       <Trash className="w-4 h-4 text-red-500" />
