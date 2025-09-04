@@ -43,6 +43,13 @@ import {
   User as UserType,
   CheckInRecord,
 } from "@/lib/storage";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { simulateEmailSend } from "@/lib/emailService";
 import ExistingUsers from "@/components/ExistingUsers";
 import SecurityLogs from "@/components/SecurityLogs";
@@ -231,60 +238,98 @@ export default function AdminDashboard() {
                   Register New User
                 </Button>
               </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Register New User</DialogTitle>
-                  <DialogDescription>
-                    Create a new user account and send OTP via email
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  {["name", "email", "contact", "department", "position"].map(
-                    (field) => (
-                      <div key={field}>
-                        <Label htmlFor={field}>
-                          {field === "department"
-                            ? "Role"
-                            : field.charAt(0).toUpperCase() + field.slice(1)}
-                        </Label>
-                        <Input
-                          id={field}
-                          type={field === "email" ? "email" : "text"}
-                          value={newUser[field as keyof NewUserState]}
-                          onChange={(e) =>
-                            setNewUser({
-                              ...newUser,
-                              [field]: e.target.value,
-                            })
-                          }
-                          placeholder={
-                            field === "email"
-                              ? "john@company.com"
-                              : `Enter ${field}`
-                          }
-                        />
-                      </div>
-                    )
-                  )}
-                  <Button
-                    onClick={handleAddUser}
-                    className="w-full"
-                    disabled={isLoadingGlobal || !isFormValid}
-                  >
-                    {isLoadingGlobal ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        Creating User...
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        Register User & Send OTP
-                      </>
-                    )}
-                  </Button>
+             <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Register New User</DialogTitle>
+                <DialogDescription>
+                  Create a new user account and send OTP via email
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="name">Full Name *</Label>
+                  <Input
+                    id="name"
+                    value={newUser.name}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, name: e.target.value })
+                    }
+                    placeholder="John Doe"
+                  />
                 </div>
-              </DialogContent>
+                <div>
+                  <Label htmlFor="email">Email Address *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, email: e.target.value })
+                    }
+                    placeholder="john@company.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="contact">Contact No</Label>
+                  <Input
+                    id="contact"
+                    value={newUser.contact}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, contact: e.target.value })
+                    }
+                    placeholder="Enter phone number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="department">Role *</Label>
+                  <Select
+                    value={newUser.department}
+                    onValueChange={(value) =>
+                      setNewUser({ ...newUser, department: value })
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="intern">Intern</SelectItem>
+                      <SelectItem value="visitor">Visitor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="position">Position</Label>
+                  <Input
+                    id="position"
+                    value={newUser.position}
+                    onChange={(e) =>
+                      setNewUser({ ...newUser, position: e.target.value })
+                    }
+                    placeholder="e.g. Programs Manager, Visitor"
+                  />
+                </div>
+                <Button
+                  onClick={handleAddUser}
+                  className="w-full"
+                  disabled={isLoadingGlobal || !isFormValid}
+                  aria-busy={isLoadingGlobal}
+                >
+                  {isLoadingGlobal ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Creating User...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Register User & Send OTP
+                    </>
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
             </Dialog>
           </div>
         </div>

@@ -22,7 +22,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { UserPlus, RefreshCw, CheckCircle, Trash, Edit, ArrowLeft, Grid, List } from "lucide-react";
+import {
+  UserPlus,
+  RefreshCw,
+  CheckCircle,
+  Trash,
+  Edit,
+  ArrowLeft,
+  Grid,
+  List,
+} from "lucide-react";
 import {
   useRealTimeUsers,
   useRealTimeCheckIns,
@@ -35,8 +44,15 @@ import {
   User as UserType,
   CheckInRecord,
 } from "@/lib/storage";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { simulateEmailSend } from "@/lib/emailService";
-import AdminDashboard from '@/components/AdminDashboard';
+import AdminDashboard from "@/components/AdminDashboard";
 import Image from "next/image";
 
 // Local types
@@ -70,7 +86,9 @@ export default function ExistingUsers() {
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [message, setMessage] = useState<MessageState>({ type: "", text: "" });
   const [query, setQuery] = useState("");
-  const [otpDisplay, setOtpDisplay] = useState<{ [userId: string]: string }>({});
+  const [otpDisplay, setOtpDisplay] = useState<{ [userId: string]: string }>(
+    {}
+  );
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
 
   const formatTime = (timestamp: string) =>
@@ -119,7 +137,9 @@ export default function ExistingUsers() {
     // Fixed: Re-enabled search functionality
     const filtered = normalizedQuery
       ? base.filter(({ user }) => {
-          const searchText = `${user.name} ${user.email} ${user.department} ${(user as any).position || ''}`.toLowerCase();
+          const searchText = `${user.name} ${user.email} ${user.department} ${
+            (user as any).position || ""
+          }`.toLowerCase();
           return searchText.includes(normalizedQuery);
         })
       : base;
@@ -160,15 +180,15 @@ export default function ExistingUsers() {
       };
 
       const otp = generateOTP();
-      const user = addUser({ 
+      const user = addUser({
         name: trimmed.name,
         email: trimmed.email,
         department: trimmed.department,
-        otp, 
+        otp,
         isActive: true,
         // Add extra properties that might not be in the User type
         ...(trimmed.contact && { contact: trimmed.contact }),
-        ...(trimmed.position && { position: trimmed.position })
+        ...(trimmed.position && { position: trimmed.position }),
       } as any);
 
       const emailSent = await simulateEmailSend({
@@ -253,7 +273,9 @@ export default function ExistingUsers() {
       updateUser(userId, { isActive: !currentStatus });
       setMessage({
         type: "success",
-        text: `${userName} ${currentStatus ? "deactivated" : "activated"} successfully`,
+        text: `${userName} ${
+          currentStatus ? "deactivated" : "activated"
+        } successfully`,
       });
     } catch (error) {
       console.error("Error toggling user status:", error);
@@ -271,10 +293,12 @@ export default function ExistingUsers() {
     }
   }, [message]);
 
-  const [currentView, setCurrentView] = useState<'home' | 'Users' | 'user'>('home');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [currentView, setCurrentView] = useState<"home" | "Users" | "user">(
+    "home"
+  );
+  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
 
-  if (currentView === 'Users') {
+  if (currentView === "Users") {
     return <AdminDashboard />;
   }
 
@@ -283,11 +307,7 @@ export default function ExistingUsers() {
       <div className="container mx-auto p-6">
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
-          <img
-            src="/RIL logo.svg" 
-            alt="Company Logo" 
-            className="w-medium"
-          />
+          <img src="/RIL logo.svg" alt="Company Logo" className="w-medium" />
 
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
             <DialogTrigger asChild>
@@ -339,15 +359,23 @@ export default function ExistingUsers() {
                 </div>
                 <div>
                   <Label htmlFor="department">Role *</Label>
-                  <Input
-                    id="department"
+                  <Select
                     value={newUser.department}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, department: e.target.value })
+                    onValueChange={(value) =>
+                      setNewUser({ ...newUser, department: value })
                     }
-                    placeholder="Select role"
-                  />
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="staff">Staff</SelectItem>
+                      <SelectItem value="intern">Intern</SelectItem>
+                      <SelectItem value="visitor">Visitor</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+
                 <div>
                   <Label htmlFor="position">Position</Label>
                   <Input
@@ -384,10 +412,11 @@ export default function ExistingUsers() {
 
         {message.text && (
           <Alert
-            className={`mb-6 ${message.type === "error"
-              ? "border-red-200 bg-red-50"
-              : "border-green-200 bg-green-50"
-              }`}
+            className={`mb-6 ${
+              message.type === "error"
+                ? "border-red-200 bg-red-50"
+                : "border-green-200 bg-green-50"
+            }`}
           >
             <AlertDescription
               className={
@@ -403,7 +432,7 @@ export default function ExistingUsers() {
           <Button
             variant="ghost"
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            onClick={() => setCurrentView('Users')}
+            onClick={() => setCurrentView("Users")}
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -419,21 +448,21 @@ export default function ExistingUsers() {
             aria-label="Search users"
             className="h-[48px] rounded-lg text-md flex-1"
           />
-          
+
           {/* View Mode Toggle */}
           <div className="flex bg-gray-100 rounded-lg p-1">
             <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              variant={viewMode === "list" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setViewMode('list')}
+              onClick={() => setViewMode("list")}
               className="px-3"
             >
               <List className="w-4 h-4" />
             </Button>
             <Button
-              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              variant={viewMode === "grid" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setViewMode('grid')}
+              onClick={() => setViewMode("grid")}
               className="px-3"
             >
               <Grid className="w-4 h-4" />
@@ -442,7 +471,13 @@ export default function ExistingUsers() {
         </div>
 
         {/* User Profile Cards */}
-        <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
+        <div
+          className={
+            viewMode === "grid"
+              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+              : "space-y-4"
+          }
+        >
           {rows.length === 0 ? (
             <div className="text-center py-12 text-gray-500 col-span-full">
               <Image
@@ -452,11 +487,15 @@ export default function ExistingUsers() {
                 height={100}
                 className="mx-auto mb-3"
               />
-              <p>{query ? "No users found matching your search" : "No users registered yet"}</p>
+              <p>
+                {query
+                  ? "No users found matching your search"
+                  : "No users registered yet"}
+              </p>
             </div>
           ) : (
-            rows.map(({ user, isPresent }) => (
-              viewMode === 'list' ? (
+            rows.map(({ user, isPresent }) =>
+              viewMode === "list" ? (
                 // List View - Horizontal Layout
                 <Card
                   key={user.id}
@@ -474,7 +513,9 @@ export default function ExistingUsers() {
                     </div>
                     <div>
                       <p className="font-semibold text-lg">{user.name}</p>
-                      <p className="text-blue-500 text-sm">{(user as any).position || "No position"}</p>
+                      <p className="text-blue-500 text-sm">
+                        {(user as any).position || "No position"}
+                      </p>
                       <p className="text-gray-500 text-xs">{user.email}</p>
                     </div>
                   </div>
@@ -491,13 +532,9 @@ export default function ExistingUsers() {
                     <div className="text-center">
                       <p className="font-bold mb-1">Status</p>
                       {isPresent ? (
-                        <div className="text-green-600">
-                          In Office
-                        </div>
+                        <div className="text-green-600">In Office</div>
                       ) : (
-                        <div>
-                          —
-                        </div>
+                        <div>—</div>
                       )}
                     </div>
                   </div>
@@ -505,24 +542,18 @@ export default function ExistingUsers() {
                   <div className="flex items-center gap-2">
                     <Button
                       size="lg"
-                      className="bg-blue-500 text-white hover:bg-blue-600"
+                      className="bg-blue-500 text-white hover:bg-blue-600 w-[]"
                       onClick={() => handleRegenerateOTP(user)}
                       disabled={isLoadingGlobal}
                     >
                       {otpDisplay[user.id] ? (
                         copiedUserId === user.id ? (
-                          <>
-                            <CheckCircle className="w-4 h-4 mr-2" />
-                            Copied!
-                          </>
+                          <>Copied!</>
                         ) : (
-                          `OTP: ${otpDisplay[user.id]}`
+                          `${otpDisplay[user.id]}`
                         )
                       ) : (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Generate OTP
-                        </>
+                        <>Generate OTP</>
                       )}
                     </Button>
                     <Button size="icon" variant="ghost" title="Edit user">
@@ -532,9 +563,15 @@ export default function ExistingUsers() {
                       size="icon"
                       variant="ghost"
                       onClick={() =>
-                        handleToggleUserStatus(user.id, user.isActive, user.name)
+                        handleToggleUserStatus(
+                          user.id,
+                          user.isActive,
+                          user.name
+                        )
                       }
-                      title={user.isActive ? "Deactivate user" : "Activate user"}
+                      title={
+                        user.isActive ? "Deactivate user" : "Activate user"
+                      }
                     >
                       {user.isActive ? (
                         <Trash className="w-4 h-4 text-red-500" />
@@ -546,50 +583,73 @@ export default function ExistingUsers() {
                 </Card>
               ) : (
                 // Grid View - Vertical Card Layout
-                <Card
-                  key={user.id}
-                  className="p-6 transition rounded-lg hover:shadow-md"
-                >
+                <Card key={user.id} className="p-6 transition rounded-lg">
                   <div className="flex flex-col items-center text-center space-y-4">
-                    {/* Avatar */}
-                    <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
-                      {user.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase()
-                        .slice(0, 2)}
-                    </div>
-                    
                     {/* User Info */}
-                    <div className="w-full">
-                      <h3 className="font-semibold text-lg mb-1">{user.name}</h3>
-                      <p className="text-blue-500 text-sm mb-1">{(user as any).position || "No position"}</p>
-                      <p className="text-gray-500 text-xs mb-3">{user.email}</p>
-                      
-                      {/* Status Badge */}
-                      <div className="mb-4">
-                        {isPresent ? (
-                          <div className="text-green-600">
-                            In Office
-                          </div>
-                        ) : (
-                          <div>
-                            —
-                          </div>
-                        )}
+                    <div className="w-full flex flex-row justify-between">
+                      <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
+                        {user.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()
+                          .slice(0, 2)}
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <h3 className="font-semibold text-lg mb-1">
+                          {user.name}
+                        </h3>
+                        <p className="text-blue-500 text-sm mb-1">
+                          {(user as any).position || "No position"}
+                        </p>
+                        <p className="text-gray-500 text-sm mb-3">
+                          {user.email}
+                        </p>
+                      </div>
+
+                      <div className="flex justify-center gap-1">
+                        <Button size="icon" variant="ghost" title="Edit user">
+                          <Edit className="w-6 h-6 text-gray-500" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            handleToggleUserStatus(
+                              user.id,
+                              user.isActive,
+                              user.name
+                            )
+                          }
+                          title={
+                            user.isActive ? "Deactivate user" : "Activate user"
+                          }
+                        >
+                          {user.isActive ? (
+                            <Trash className="w-6 h-6 text-red-500" />
+                          ) : (
+                            <CheckCircle className="w-6 h-6 text-green-500" />
+                          )}
+                        </Button>
                       </div>
                     </div>
 
-                    {/* User Details */}
-                    <div className="w-full space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Contact:</span>
-                        <span>{(user as any).contact || "—"}</span>
+                    <div className="gap-20 grid grid-cols-3 text-sm">
+                      <div className="text-center">
+                        <p className="font-bold mb-1 w-20">Contact No</p>
+                        <p>{(user as any).contact || "—"}</p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium text-gray-600">Role:</span>
-                        <span>{user.department || "—"}</span>
+                      <div className="text-center">
+                        <p className="font-bold mb-1">Role</p>
+                        <p>{user.department || "—"}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold mb-1">Status</p>
+                        {isPresent ? (
+                          <div className="text-green-600 w-20">In Office</div>
+                        ) : (
+                          <div>—</div>
+                        )}
                       </div>
                     </div>
 
@@ -602,45 +662,19 @@ export default function ExistingUsers() {
                       >
                         {otpDisplay[user.id] ? (
                           copiedUserId === user.id ? (
-                            <>
-                              <CheckCircle className="w-4 h-4 mr-2" />
-                              Copied!
-                            </>
+                            <>Copied!</>
                           ) : (
-                            `OTP: ${otpDisplay[user.id]}`
+                            `${otpDisplay[user.id]}`
                           )
                         ) : (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Generate OTP
-                          </>
+                          <>Generate OTP</>
                         )}
                       </Button>
-                      
-                      <div className="flex justify-center gap-2">
-                        <Button size="icon" variant="ghost" title="Edit user">
-                          <Edit className="w-4 h-4 text-gray-500" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            handleToggleUserStatus(user.id, user.isActive, user.name)
-                          }
-                          title={user.isActive ? "Deactivate user" : "Activate user"}
-                        >
-                          {user.isActive ? (
-                            <Trash className="w-4 h-4 text-red-500" />
-                          ) : (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          )}
-                        </Button>
-                      </div>
                     </div>
                   </div>
                 </Card>
               )
-            ))
+            )
           )}
         </div>
       </div>
