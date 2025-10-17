@@ -112,14 +112,36 @@ export default function UserCheckIn() {
         setMessage({ type: "error", text: result.error || "Check out failed" });
       }
     } else {
-      // Check in - call sign in again
-      const result = await verifyAndSignIn(session.email, "");
-      if (result.success) {
-        setMessage({ type: "success", text: "Checked in successfully!" });
-        // Update session to reflect checked-in status
-        loadSession();
-      } else {
-        setMessage({ type: "error", text: result.error || "Check in failed" });
+      // Check in - use signInMember directly without OTP verification
+      if (loading) return; // Prevent multiple simultaneous requests
+      try {
+        // Import signInMember from the member-auth library
+        const { signInMember } = await import('@/lib/member-auth');
+        const signInResult = await signInMember(session.email);
+
+        if (signInResult) {
+          setMessage({ type: "success", text: "Checked in successfully!" });
+
+          // Update session to reflect checked-in status
+          const updatedSession = {
+            ...session,
+            isSignedIn: true,
+            visitId: signInResult.id,
+            signInTime: signInResult.sign_in_time
+          };
+
+          // Update localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('user_checkin_session', JSON.stringify(updatedSession));
+          }
+
+          // Force re-render by calling loadSession
+          loadSession();
+        } else {
+          setMessage({ type: "error", text: "Check in failed" });
+        }
+      } catch (error: any) {
+        setMessage({ type: "error", text: error.message || "Check in failed" });
       }
     }
   };
