@@ -77,16 +77,16 @@ export default function AdminDashboard() {
   const { logout } = useAdminAuth();
   const { members, loading: membersLoading, error: membersError, refetch } = useAdminMembers();
   const { signedInMembers } = useSignedInMembers();
-  
+
   const [logs, setLogs] = useState<NewUserState[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [todayVisitLogs, setTodayVisitLogs] = useState<any[]>([]);
-  
+
   // Keep old hooks for backward compatibility (if needed)
   const users = useRealTimeUsers();
   const records = useRealTimeCheckIns();
   const stats = useRealTimeStats();
-  
+
   // Fetch today's visit logs
   useEffect(() => {
     const fetchTodayVisitLogs = async () => {
@@ -96,14 +96,14 @@ export default function AdminDashboard() {
         .select('*')
         .gte('sign_in_time', `${today}T00:00:00`)
         .order('sign_in_time', { ascending: false });
-      
+
       if (!error && data) {
         setTodayVisitLogs(data);
       }
     };
-    
+
     fetchTodayVisitLogs();
-    
+
     // Refresh every 30 seconds
     const interval = setInterval(fetchTodayVisitLogs, 30000);
     return () => clearInterval(interval);
@@ -154,26 +154,26 @@ export default function AdminDashboard() {
 
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    
+
     // Use members from Supabase if available, otherwise fall back to localStorage users
     const dataSource = members.length > 0 ? members : users;
-    
+
     const base = dataSource.map((u: any) => {
       const last = lastRecordByUser.get(u.id);
       const isPresent = presentUserIds.has(u.id) || (u.is_signed_in || false);
-      
+
       // Get today's visit logs for this member
       const memberVisitLogs = todayVisitLogs.filter(log => log.member_id === u.id);
       const latestVisit = memberVisitLogs[0]; // Already sorted by sign_in_time desc
-      
-      return { 
+
+      return {
         user: {
           id: u.id,
           name: u.name,
           email: u.email,
           department: u.category || u.department || u.role,
           isActive: u.is_active !== undefined ? u.is_active : u.isActive
-        }, 
+        },
         isPresent,
         lastRecord: last,
         // Use visit logs data
@@ -220,7 +220,7 @@ export default function AdminDashboard() {
       // Validate category
       const validCategories = ['staff', 'understudy', 'innovation_lab_user'];
       const category = newUser.department.trim();
-      
+
       if (!category || !validCategories.includes(category)) {
         throw new Error('Please select a valid role');
       }
@@ -244,12 +244,12 @@ export default function AdminDashboard() {
 
       if (memberError) {
         console.error('Supabase error:', memberError);
-        
+
         // Handle duplicate email error
         if (memberError.code === '23505') {
           throw new Error('This email is already registered. Please use a different email.');
         }
-        
+
         throw new Error(memberError.message || 'Failed to add member to database');
       }
 
@@ -265,15 +265,7 @@ export default function AdminDashboard() {
           type: "success",
           text: `Member registered successfully! OTP sent to ${member.email}`,
         });
-        setNewUser({
-          name: "",
-          email: "",
-          department: "",
-          contact: "",
-          position: "",
-        });
-        setIsAddUserOpen(false);
-        
+
         // Refresh members list
         refetch();
       } else {
@@ -282,10 +274,20 @@ export default function AdminDashboard() {
           text: `Member registered but failed to send OTP: ${otpResult.error}`,
         });
       }
+
+      // Reset form
+      setNewUser({
+        name: "",
+        email: "",
+        department: "",
+        contact: "",
+        position: "",
+      });
+      setIsAddUserOpen(false);
     } catch (error: any) {
-      setMessage({ 
-        type: "error", 
-        text: error.message || "Failed to register member" 
+      setMessage({
+        type: "error",
+        text: error.message || "Failed to register member"
       });
     } finally {
       setIsLoadingGlobal(false);
@@ -450,7 +452,7 @@ export default function AdminDashboard() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Daily Log</CardTitle>
-              <CardDescription>See who’s signed in today</CardDescription>
+              <CardDescription>See who's signed in today</CardDescription>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">

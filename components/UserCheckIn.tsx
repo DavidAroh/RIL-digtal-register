@@ -89,7 +89,6 @@ export default function UserCheckIn() {
     }
   };
 
-
   const handleCheckInOut = async () => {
     if (!session) return;
 
@@ -125,15 +124,12 @@ export default function UserCheckIn() {
     }
   };
 
-
   const formatTime = (time: Date) =>
     time.toLocaleTimeString("en-US", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
     });
-
-    
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
@@ -146,7 +142,7 @@ export default function UserCheckIn() {
           </Button>
         </Link>
       </div> */}
-      
+
       <div className="w-full max-w-sm flex justify-center">
         {!session ? (
           <Card className="shadow-none border-0">
@@ -212,8 +208,8 @@ export default function UserCheckIn() {
                     placeholder="Enter your email"
                     className="w-full h-12 rounded-4"
                   />
-                  <Button 
-                    onClick={handleEmailNext} 
+                  <Button
+                    onClick={handleEmailNext}
                     className="w-[276px] h-12"
                   >
                     Next

@@ -78,7 +78,7 @@ export default function ExistingUsers() {
   const records = useRealTimeCheckIns();
   useRealTimeStats();
   const router = useRouter();
-  
+
   // Use Supabase members if available, otherwise fall back to localStorage
   const displayUsers = members.length > 0 ? members : users;
 
@@ -138,7 +138,7 @@ export default function ExistingUsers() {
     const base = displayUsers.map((u: any) => {
       const last = lastRecordByUser.get(u.id);
       const isPresent = presentUserIds.has(u.id) || (u.is_signed_in || false);
-      return { 
+      return {
         user: {
           id: u.id,
           name: u.name,
@@ -148,9 +148,9 @@ export default function ExistingUsers() {
           contact: u.phone_number || (u as any).contact,
           position: u.role || (u as any).position,
           otp: u.otp
-        }, 
-        isPresent, 
-        lastRecord: last 
+        },
+        isPresent,
+        lastRecord: last
       };
     });
 
@@ -249,15 +249,15 @@ export default function ExistingUsers() {
     setIsLoadingGlobal(true);
     try {
       console.log('🔄 Regenerating OTP for:', user.email);
-      
+
       // Send OTP via EmailJS and store in Supabase
       const result = await sendOTPService(user.email, user.name);
-      
+
       if (result.success) {
         // Show OTP in display (for development/testing)
         if (result.otp) {
           setOtpDisplay((prev) => ({ ...prev, [user.id]: result.otp }));
-          
+
           // Copy to clipboard
           try {
             if (navigator.clipboard && window.isSecureContext) {
@@ -269,25 +269,25 @@ export default function ExistingUsers() {
             console.warn("Failed to copy to clipboard:", clipboardError);
           }
         }
-        
-        setMessage({ 
-          type: "success", 
-          text: `OTP sent to ${user.email}${result.otp ? '. Check console for OTP.' : ''}` 
+
+        setMessage({
+          type: "success",
+          text: `OTP sent to ${user.email}${result.otp ? '. Check console for OTP.' : ''}`
         });
-        
+
         // Also update localStorage for backward compatibility
         updateUser(user.id, { otp: result.otp || generateOTP() });
       } else {
-        setMessage({ 
-          type: "error", 
-          text: result.error || "Failed to send OTP" 
+        setMessage({
+          type: "error",
+          text: result.error || "Failed to send OTP"
         });
       }
     } catch (error: any) {
       console.error("Error regenerating OTP:", error);
-      setMessage({ 
-        type: "error", 
-        text: error.message || "Failed to regenerate OTP" 
+      setMessage({
+        type: "error",
+        text: error.message || "Failed to regenerate OTP"
       });
     } finally {
       setIsLoadingGlobal(false);
@@ -525,164 +525,50 @@ export default function ExistingUsers() {
             }
           >
             {rows.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 col-span-full">
-              <Image
-                src="/Social 02.svg"
-                alt="Empty state"
-                width={100}
-                height={100}
-                className="mx-auto mb-3"
-              />
-              <p>
-                {query
-                  ? "No users found matching your search"
-                  : "No users registered yet"}
-              </p>
-            </div>
-          ) : (
-            rows.map(({ user, isPresent }) =>
-              viewMode === "list" ? (
-                // List View - Horizontal Layout
-                <Card
-                  key={user.id}
-                  className="flex items-center justify-between p-7 transition rounded-lg"
-                >
-                  <div className="flex items-center gap-3">
-                    {/* Avatar with initials */}
-                    <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
-                      {user.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .toUpperCase()
-                        .slice(0, 2)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-lg">{user.name}</p>
-                      <p className="text-blue-500 text-sm">
-                        {(user as any).position || "No position"}
-                      </p>
-                      <p className="text-gray-500 text-xs">{user.email}</p>
-                    </div>
-                  </div>
-
-                  <div className="gap-28 grid grid-cols-3 text-sm">
-                    <div className="text-center">
-                      <p className="font-bold mb-1">Contact No</p>
-                      <p>{(user as any).contact || "—"}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold mb-1">Role</p>
-                      <p>{user.department || "—"}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold mb-1">Status</p>
-                      {isPresent ? (
-                        <div className="text-green-600">In Office</div>
-                      ) : (
-                        <div>—</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="lg"
-                      className="bg-blue-500 text-white hover:bg-blue-600 w-[]"
-                      onClick={() => handleRegenerateOTP(user)}
-                      disabled={isLoadingGlobal}
-                    >
-                      {otpDisplay[user.id] ? (
-                        copiedUserId === user.id ? (
-                          <>Copied!</>
-                        ) : (
-                          `${otpDisplay[user.id]}`
-                        )
-                      ) : (
-                        <>Generate OTP</>
-                      )}
-                    </Button>
-                    <Button size="icon" variant="ghost" title="Edit user">
-                      <Edit className="w-4 h-4 text-gray-500" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() =>
-                        handleToggleUserStatus(
-                          user.id,
-                          user.isActive,
-                          user.name
-                        )
-                      }
-                      title={
-                        user.isActive ? "Deactivate user" : "Activate user"
-                      }
-                    >
-                      {user.isActive ? (
-                        <Trash className="w-4 h-4 text-red-500" />
-                      ) : (
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                      )}
-                    </Button>
-                  </div>
-                </Card>
-              ) : (
-                // Grid View - Vertical Card Layout
-                <Card key={user.id} className="p-6 transition rounded-lg">
-                  <div className="flex flex-col items-center text-center space-y-4">
-                    {/* User Info */}
-                    <div className="w-full flex flex-row justify-between">
+              <div className="text-center py-12 text-gray-500 col-span-full">
+                <Image
+                  src="/Social 02.svg"
+                  alt="Empty state"
+                  width={100}
+                  height={100}
+                  className="mx-auto mb-3"
+                />
+                <p>
+                  {query
+                    ? "No users found matching your search"
+                    : "No users registered yet"}
+                </p>
+              </div>
+            ) : (
+              rows.map(({ user, isPresent }) =>
+                viewMode === "list" ? (
+                  // List View - Horizontal Layout
+                  <Card
+                    key={user.id}
+                    className="flex items-center justify-between p-7 transition rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Avatar with initials */}
                       <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
                         {user.name
                           .split(" ")
-                          .map((n) => n[0])
+                          .map((n: string) => n[0])
                           .join("")
                           .toUpperCase()
                           .slice(0, 2)}
                       </div>
-                      <div className="flex flex-col text-left">
-                        <h3 className="font-semibold text-lg mb-1">
-                          {user.name}
-                        </h3>
-                        <p className="text-blue-500 text-sm mb-1">
+                      <div>
+                        <p className="font-semibold text-lg">{user.name}</p>
+                        <p className="text-blue-500 text-sm">
                           {(user as any).position || "No position"}
                         </p>
-                        <p className="text-gray-500 text-sm mb-3">
-                          {user.email}
-                        </p>
-                      </div>
-
-                      <div className="flex justify-center gap-1">
-                        <Button size="icon" variant="ghost" title="Edit user">
-                          <Edit className="w-6 h-6 text-gray-500" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() =>
-                            handleToggleUserStatus(
-                              user.id,
-                              user.isActive,
-                              user.name
-                            )
-                          }
-                          title={
-                            user.isActive ? "Deactivate user" : "Activate user"
-                          }
-                        >
-                          {user.isActive ? (
-                            <Trash className="w-6 h-6 text-red-500" />
-                          ) : (
-                            <CheckCircle className="w-6 h-6 text-green-500" />
-                          )}
-                        </Button>
+                        <p className="text-gray-500 text-xs">{user.email}</p>
                       </div>
                     </div>
 
-                    <div className="gap-20 grid grid-cols-3 text-sm">
+                    <div className="gap-28 grid grid-cols-3 text-sm">
                       <div className="text-center">
-                        <p className="font-bold mb-1 w-20">Contact No</p>
+                        <p className="font-bold mb-1">Contact No</p>
                         <p>{(user as any).contact || "—"}</p>
                       </div>
                       <div className="text-center">
@@ -692,17 +578,17 @@ export default function ExistingUsers() {
                       <div className="text-center">
                         <p className="font-bold mb-1">Status</p>
                         {isPresent ? (
-                          <div className="text-green-600 w-20">In Office</div>
+                          <div className="text-green-600">In Office</div>
                         ) : (
                           <div>—</div>
                         )}
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="w-full space-y-2">
+                    <div className="flex items-center gap-2">
                       <Button
-                        className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                        size="lg"
+                        className="bg-blue-500 text-white hover:bg-blue-600 w-[]"
                         onClick={() => handleRegenerateOTP(user)}
                         disabled={isLoadingGlobal}
                       >
@@ -716,12 +602,126 @@ export default function ExistingUsers() {
                           <>Generate OTP</>
                         )}
                       </Button>
+                      <Button size="icon" variant="ghost" title="Edit user">
+                        <Edit className="w-4 h-4 text-gray-500" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() =>
+                          handleToggleUserStatus(
+                            user.id,
+                            user.isActive,
+                            user.name
+                          )
+                        }
+                        title={
+                          user.isActive ? "Deactivate user" : "Activate user"
+                        }
+                      >
+                        {user.isActive ? (
+                          <Trash className="w-4 h-4 text-red-500" />
+                        ) : (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        )}
+                      </Button>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                ) : (
+                  // Grid View - Vertical Card Layout
+                  <Card key={user.id} className="p-6 transition rounded-lg">
+                    <div className="flex flex-col items-center text-center space-y-4">
+                      {/* User Info */}
+                      <div className="w-full flex flex-row justify-between">
+                        <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
+                          {user.name
+                            .split(" ")
+                            .map((n: string) => n[0])
+                            .join("")
+                            .toUpperCase()
+                            .slice(0, 2)}
+                        </div>
+                        <div className="flex flex-col text-left">
+                          <h3 className="font-semibold text-lg mb-1">
+                            {user.name}
+                          </h3>
+                          <p className="text-blue-500 text-sm mb-1">
+                            {(user as any).position || "No position"}
+                          </p>
+                          <p className="text-gray-500 text-sm mb-3">
+                            {user.email}
+                          </p>
+                        </div>
+
+                        <div className="flex justify-center gap-1">
+                          <Button size="icon" variant="ghost" title="Edit user">
+                            <Edit className="w-6 h-6 text-gray-500" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() =>
+                              handleToggleUserStatus(
+                                user.id,
+                                user.isActive,
+                                user.name
+                              )
+                            }
+                            title={
+                              user.isActive ? "Deactivate user" : "Activate user"
+                            }
+                          >
+                            {user.isActive ? (
+                              <Trash className="w-6 h-6 text-red-500" />
+                            ) : (
+                              <CheckCircle className="w-6 h-6 text-green-500" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="gap-20 grid grid-cols-3 text-sm">
+                        <div className="text-center">
+                          <p className="font-bold mb-1 w-20">Contact No</p>
+                          <p>{(user as any).contact || "—"}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold mb-1">Role</p>
+                          <p>{user.department || "—"}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold mb-1">Status</p>
+                          {isPresent ? (
+                            <div className="text-green-600 w-20">In Office</div>
+                          ) : (
+                            <div>—</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="w-full space-y-2">
+                        <Button
+                          className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                          onClick={() => handleRegenerateOTP(user)}
+                          disabled={isLoadingGlobal}
+                        >
+                          {otpDisplay[user.id] ? (
+                            copiedUserId === user.id ? (
+                              <>Copied!</>
+                            ) : (
+                              `${otpDisplay[user.id]}`
+                            )
+                          ) : (
+                            <>Generate OTP</>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                )
               )
-            )
-          )}
+            )}
           </div>
         )}
       </div>

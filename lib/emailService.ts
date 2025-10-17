@@ -77,7 +77,7 @@ export const simulateEmailSend = async (
       console.log(`   To: ${emailData.to_email}`);
       console.log(`   Name: ${emailData.to_name}`);
       console.log(`   OTP: ${emailData.otp_code}`);
-      console.log(`   Company: ${emailData.company_name || "Your Company"}`);
+      console.log(`   Company: ${emailData.company_name || "RIL Innovation Lab"}`);
       resolve(true);
     }, 1000);
   });
