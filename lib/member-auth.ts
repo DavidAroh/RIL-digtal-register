@@ -1,53 +1,43 @@
-// lib/member-auth.ts
 import { supabase } from './supabase'
 
-// Send OTP via Supabase Edge Function
 export const sendOTP = async (email: string) => {
+  // Send OTP
   const { data, error } = await supabase.functions.invoke('send-otp', {
-    body: { email },
+    body: { email }
   })
   
   if (error) throw error
   return data
 }
 
-// Verify OTP via Supabase Edge Function
 export const verifyOTP = async (email: string, otp: string) => {
   const { data, error } = await supabase.functions.invoke('verify-otp', {
-    body: { email, otp },
+    body: { email, otp }
   })
   
   if (error) throw error
   return data
 }
 
-// Sign in member using RPC function
 export const signInMember = async (email: string) => {
   const { data, error } = await supabase.rpc('sign_in_member_by_email', {
-    member_email: email
+    p_email: email
   })
   
-  if (error) {
-    console.error('Sign in error:', error)
-    throw error
-  }
+  if (error) throw error
   return data[0] // Returns { id, member_id, member_name, sign_in_time, ... }
 }
 
-// Sign out member using RPC function
 export const signOutMember = async (email: string) => {
   const { data, error } = await supabase.rpc('sign_out_member_by_email', {
-    member_email: email
+    p_email: email
   })
   
-  if (error) {
-    console.error('Sign out error:', error)
-    throw error
-  }
+  if (error) throw error
   return data[0] // Returns { id, member_id, member_name, sign_in_time, sign_out_time, duration }
 }
 
-// Legacy functions for backward compatibility (if needed)
+// Legacy functions kept for backward compatibility
 export const createVisitLog = async (memberId: string) => {
   const { data, error } = await supabase
     .from('visit_logs')

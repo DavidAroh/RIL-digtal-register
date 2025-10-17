@@ -4,9 +4,9 @@ import emailjs from "@emailjs/browser";
 const EMAILJS_SERVICE_ID =
   process.env.NEXT_PUBLIC_EMAILJS_SERVICE_ID || "service_gzpjfl2";
 const EMAILJS_TEMPLATE_ID =
-  process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID || "template_1kdjkf9";
+  process.env.NEXT_PUBLIC_EMAILJS_TEMPLATE_ID || "your_template_id";
 const EMAILJS_PUBLIC_KEY =
-  process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY || "XntREf5lSNP0gajP5";
+  process.env.NEXT_PUBLIC_EMAILJS_PUBLIC_KEY || "your_public_key";
 
 export interface EmailData {
   to_email: string;
@@ -20,31 +20,18 @@ export interface EmailData {
  */
 export const sendOTPEmail = async (emailData: EmailData): Promise<boolean> => {
   try {
-    console.log('📧 Attempting to send email via EmailJS...');
-    console.log('Service ID:', EMAILJS_SERVICE_ID);
-    console.log('Template ID:', EMAILJS_TEMPLATE_ID);
-    console.log('To:', emailData.to_email);
-
-    // Check if we're on the client side
-    if (typeof window === "undefined") {
-      console.error("❌ EmailJS can only be used on the client side");
-      return false;
+    // Initialize EmailJS only on client side
+    if (typeof window !== "undefined") {
+      emailjs.init(EMAILJS_PUBLIC_KEY);
     }
-
-    // Initialize EmailJS
-    emailjs.init(EMAILJS_PUBLIC_KEY);
 
     const templateParams = {
       to_email: emailData.to_email,
-      user_email: emailData.to_email, // Alternative variable name
       to_name: emailData.to_name,
-      user_name: emailData.to_name, // Alternative variable name
       otp_code: emailData.otp_code,
-      company_name: emailData.company_name || "RIL Innovation Lab",
-      message: `Your OTP code is: ${emailData.otp_code}. This code is valid for 10 minutes.`,
+      company_name: emailData.company_name || "Your Company",
+      message: `Your OTP for office check-in is: ${emailData.otp_code}. This code is valid for today only.`,
     };
-
-    console.log('📤 Sending email with params:', templateParams);
 
     const result = await emailjs.send(
       EMAILJS_SERVICE_ID,
@@ -52,15 +39,9 @@ export const sendOTPEmail = async (emailData: EmailData): Promise<boolean> => {
       templateParams
     );
 
-    console.log('✅ Email sent successfully:', result);
     return result.status === 200;
-  } catch (error: any) {
+  } catch (error) {
     console.error("❌ Error sending email:", error);
-    console.error("Error details:", {
-      message: error.message,
-      text: error.text,
-      status: error.status
-    });
     return false;
   }
 };
@@ -77,7 +58,7 @@ export const simulateEmailSend = async (
       console.log(`   To: ${emailData.to_email}`);
       console.log(`   Name: ${emailData.to_name}`);
       console.log(`   OTP: ${emailData.otp_code}`);
-      console.log(`   Company: ${emailData.company_name || "RIL Innovation Lab"}`);
+      console.log(`   Company: ${emailData.company_name || "Your Company"}`);
       resolve(true);
     }, 1000);
   });

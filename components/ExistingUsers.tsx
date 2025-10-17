@@ -34,18 +34,13 @@ import {
   List,
 } from "lucide-react";
 import {
-  useRealTimeUsers,
-  useRealTimeCheckIns,
+  useRealTimeMembers,
+  useRealTimeSignedIn,
   useRealTimeStats,
 } from "@/hooks/useRealTime";
-import { useAdminMembers } from "@/hooks/useAdminData";
-import {
-  addUser,
-  updateUser,
-  generateOTP,
-  User as UserType,
-  CheckInRecord,
-} from "@/lib/storage";
+import { supabase, adminLogout } from "@/lib/supabase";
+import { sendOTP } from "@/lib/member-auth";
+import { MemberWithStatus } from "@/lib/admin-queries";
 import {
   Select,
   SelectContent,
@@ -54,7 +49,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { simulateEmailSend } from "@/lib/emailService";
-import { sendOTP as sendOTPService } from "@/lib/otp-service";
 import AdminDashboard from "@/components/AdminDashboard";
 import Image from "next/image";
 
@@ -73,14 +67,10 @@ type MessageState = {
 };
 
 export default function ExistingUsers() {
-  const { members, loading: membersLoading, error: membersError, refetch } = useAdminMembers();
-  const users = useRealTimeUsers(); // Fallback to localStorage
-  const records = useRealTimeCheckIns();
-  useRealTimeStats();
+  const { members, isLoading: membersLoading } = useRealTimeMembers();
+  const { signedInMembers, isLoading: signedInLoading } = useRealTimeSignedIn();
+  const stats = useRealTimeStats();
   const router = useRouter();
-
-  // Use Supabase members if available, otherwise fall back to localStorage
-  const displayUsers = members.length > 0 ? members : users;
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState<NewUserState>({
@@ -93,7 +83,7 @@ export default function ExistingUsers() {
   const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
   const [message, setMessage] = useState<MessageState>({ type: "", text: "" });
   const [query, setQuery] = useState("");
-  const [otpDisplay, setOtpDisplay] = useState<{ [userId: string]: string }>(
+  const [otpDisplay, setOtpDisplay] = useState<{ [memberId: string]: string }>(
     {}
   );
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
@@ -104,72 +94,21 @@ export default function ExistingUsers() {
       minute: "2-digit",
     });
 
-  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const todayRecords = useMemo(
-    () => records.filter((r) => r.date === today),
-    [records, today]
-  );
-
-  const lastRecordByUser = useMemo(() => {
-    const sorted = [...todayRecords].sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    const map = new Map<string, CheckInRecord>();
-    sorted.forEach((r) => map.set(r.userId, r));
-    return map;
-  }, [todayRecords]);
-
-  const presentUserIds = useMemo(() => {
-    const sorted = [...todayRecords].sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    const present = new Set<string>();
-    sorted.forEach((r) => {
-      if (r.action === "check-in") present.add(r.userId);
-      else present.delete(r.userId);
-    });
-    return present;
-  }, [todayRecords]);
-
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const base = displayUsers.map((u: any) => {
-      const last = lastRecordByUser.get(u.id);
-      const isPresent = presentUserIds.has(u.id) || (u.is_signed_in || false);
-      return {
-        user: {
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          department: u.category || u.department || u.role,
-          isActive: u.is_active !== undefined ? u.is_active : u.isActive,
-          contact: u.phone_number || (u as any).contact,
-          position: u.role || (u as any).position,
-          otp: u.otp
-        },
-        isPresent,
-        lastRecord: last
-      };
-    });
-
-    // Fixed: Re-enabled search functionality
     const filtered = normalizedQuery
-      ? base.filter(({ user }) => {
-          const searchText = `${user.name} ${user.email} ${user.department} ${
-            user.position || ""
-          }`.toLowerCase();
+      ? members.filter((member) => {
+          const searchText = `${member.name} ${member.email} ${member.role || ""} ${member.category}`.toLowerCase();
           return searchText.includes(normalizedQuery);
         })
-      : base;
+      : members;
 
     return filtered.sort((a, b) => {
-      if (a.isPresent !== b.isPresent) return a.isPresent ? -1 : 1;
-      if (a.user.isActive !== b.user.isActive) return a.user.isActive ? -1 : 1;
-      return a.user.name.localeCompare(b.user.name);
+      if (a.is_signed_in !== b.is_signed_in) return a.is_signed_in ? -1 : 1;
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+      return a.name.localeCompare(b.name);
     });
-  }, [displayUsers, lastRecordByUser, presentUserIds, query]);
+  }, [members, query]);
 
   const isFormValid =
     newUser.name.trim() !== "" &&
@@ -199,44 +138,39 @@ export default function ExistingUsers() {
         position: newUser.position.trim(),
       };
 
-      const otp = generateOTP();
-      const user = addUser({
-        name: trimmed.name,
-        email: trimmed.email,
-        department: trimmed.department,
-        otp,
-        isActive: true,
-        // Add extra properties that might not be in the User type
-        ...(trimmed.contact && { contact: trimmed.contact }),
-        ...(trimmed.position && { position: trimmed.position }),
-      } as any);
+      // Add member to Supabase
+      const { data: member, error: memberError } = await supabase
+        .from('members')
+        .insert([{
+          name: trimmed.name,
+          email: trimmed.email,
+          phone_number: trimmed.contact || null,
+          role: trimmed.position || null,
+          category: trimmed.department as 'staff' | 'understudy' | 'innovation_lab_user',
+          is_active: true
+        }])
+        .select()
+        .single();
+      
+      if (memberError) throw memberError;
+      
+      // Send OTP via Edge Function
+      const result = await sendOTP(trimmed.email);
+      const otp = result?.otp || result?.code || 'Sent';
 
-      const emailSent = await simulateEmailSend({
-        to_email: user.email,
-        to_name: user.name,
-        otp_code: otp,
-        company_name: "Your Company",
+      setMessage({
+        type: "success",
+        text: `User added successfully! OTP${otp !== 'Sent' ? `: ${otp}` : ''} sent to ${trimmed.email}`,
       });
-
-      if (emailSent) {
-        setMessage({
-          type: "success",
-          text: `User added successfully! OTP sent to ${user.email}`,
-        });
-        setNewUser({
-          name: "",
-          email: "",
-          department: "",
-          contact: "",
-          position: "",
-        });
-        setIsAddUserOpen(false);
-      } else {
-        setMessage({
-          type: "error",
-          text: "User added but failed to send OTP email",
-        });
-      }
+      
+      setNewUser({
+        name: "",
+        email: "",
+        department: "",
+        contact: "",
+        position: "",
+      });
+      setIsAddUserOpen(false);
     } catch (error) {
       console.error("Error adding user:", error);
       setMessage({ type: "error", text: "Failed to add user" });
@@ -245,73 +179,70 @@ export default function ExistingUsers() {
     }
   };
 
-  const handleRegenerateOTP = async (user: any) => {
+  const handleRegenerateOTP = async (member: MemberWithStatus) => {
     setIsLoadingGlobal(true);
     try {
-      console.log('🔄 Regenerating OTP for:', user.email);
+      // Send OTP via Supabase Edge Function
+      const result = await sendOTP(member.email);
+      
+      // The Edge Function should return the OTP
+      const newOTP = result?.otp || result?.code || 'Check email';
+      
+      // Display OTP on button
+      setOtpDisplay((prev) => ({ ...prev, [member.id]: newOTP }));
 
-      // Send OTP via EmailJS and store in Supabase
-      const result = await sendOTPService(user.email, user.name);
-
-      if (result.success) {
-        // Show OTP in display (for development/testing)
-        if (result.otp) {
-          setOtpDisplay((prev) => ({ ...prev, [user.id]: result.otp }));
-
-          // Copy to clipboard
-          try {
-            if (navigator.clipboard && window.isSecureContext) {
-              await navigator.clipboard.writeText(result.otp);
-              setCopiedUserId(user.id);
-              setTimeout(() => setCopiedUserId(null), 2000);
-            }
-          } catch (clipboardError) {
-            console.warn("Failed to copy to clipboard:", clipboardError);
+      // Copy to clipboard if we have the OTP
+      if (newOTP && newOTP !== 'Check email') {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(newOTP);
+            setCopiedUserId(member.id);
+            setTimeout(() => setCopiedUserId(null), 2000);
           }
+        } catch (clipboardError) {
+          console.warn("Failed to copy to clipboard:", clipboardError);
         }
-
-        setMessage({
-          type: "success",
-          text: `OTP sent to ${user.email}${result.otp ? '. Check console for OTP.' : ''}`
-        });
-
-        // Also update localStorage for backward compatibility
-        updateUser(user.id, { otp: result.otp || generateOTP() });
-      } else {
-        setMessage({
-          type: "error",
-          text: result.error || "Failed to send OTP"
-        });
       }
+
+      setMessage({ 
+        type: "success", 
+        text: `OTP sent to ${member.email}${newOTP !== 'Check email' ? ` - OTP: ${newOTP}` : ''}` 
+      });
     } catch (error: any) {
-      console.error("Error regenerating OTP:", error);
-      setMessage({
-        type: "error",
-        text: error.message || "Failed to regenerate OTP"
+      console.error("Error generating OTP:", error);
+      setMessage({ 
+        type: "error", 
+        text: `Failed to send OTP: ${error.message || 'Unknown error'}` 
       });
     } finally {
       setIsLoadingGlobal(false);
     }
   };
 
-  const handleToggleUserStatus = (
-    userId: string,
+  const handleToggleUserStatus = async (
+    memberId: string,
     currentStatus: boolean,
-    userName: string
+    memberName: string
   ) => {
     try {
-      updateUser(userId, { isActive: !currentStatus });
+      const { error } = await supabase
+        .from('members')
+        .update({ is_active: !currentStatus })
+        .eq('id', memberId);
+      
+      if (error) throw error;
+      
       setMessage({
         type: "success",
-        text: `${userName} ${
+        text: `${memberName} ${
           currentStatus ? "deactivated" : "activated"
         } successfully`,
       });
     } catch (error) {
-      console.error("Error toggling user status:", error);
+      console.error("Error toggling member status:", error);
       setMessage({
         type: "error",
-        text: "Failed to update user status",
+        text: "Failed to update member status",
       });
     }
   };
@@ -402,8 +333,8 @@ export default function ExistingUsers() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="intern">Intern</SelectItem>
-                      <SelectItem value="visitor">Visitor</SelectItem>
+                      <SelectItem value="understudy">Understudy</SelectItem>
+                      <SelectItem value="innovation_lab_user">Innovation Lab User</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -440,6 +371,7 @@ export default function ExistingUsers() {
               </div>
             </DialogContent>
           </Dialog>
+          
         </div>
 
         {message.text && (
@@ -503,227 +435,212 @@ export default function ExistingUsers() {
         </div>
 
         {/* User Profile Cards */}
-        {membersLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
-            <span className="ml-3 text-gray-500">Loading members...</span>
-          </div>
-        ) : membersError ? (
-          <div className="text-center py-12">
-            <p className="text-red-500 mb-4">Error loading members: {membersError}</p>
-            <Button onClick={refetch} variant="outline">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Retry
-            </Button>
-          </div>
-        ) : (
-          <div
-            className={
-              viewMode === "grid"
-                ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-                : "space-y-4"
-            }
-          >
-            {rows.length === 0 ? (
-              <div className="text-center py-12 text-gray-500 col-span-full">
-                <Image
-                  src="/Social 02.svg"
-                  alt="Empty state"
-                  width={100}
-                  height={100}
-                  className="mx-auto mb-3"
-                />
-                <p>
-                  {query
-                    ? "No users found matching your search"
-                    : "No users registered yet"}
-                </p>
-              </div>
-            ) : (
-              rows.map(({ user, isPresent }) =>
-                viewMode === "list" ? (
-                  // List View - Horizontal Layout
-                  <Card
-                    key={user.id}
-                    className="flex items-center justify-between p-7 transition rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      {/* Avatar with initials */}
+        <div
+          className={
+            viewMode === "grid"
+              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+              : "space-y-4"
+          }
+        >
+          {rows.length === 0 ? (
+            <div className="text-center py-12 text-gray-500 col-span-full">
+              <Image
+                src="/Social 02.svg"
+                alt="Empty state"
+                width={100}
+                height={100}
+                className="mx-auto mb-3"
+              />
+              <p>
+                {query
+                  ? "No users found matching your search"
+                  : "No users registered yet"}
+              </p>
+            </div>
+          ) : (
+            rows.map((member) =>
+              viewMode === "list" ? (
+                // List View - Horizontal Layout
+                <Card
+                  key={member.id}
+                  className="flex items-center justify-between p-7 transition rounded-lg"
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Avatar with initials */}
+                    <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
+                      {member.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-lg">{member.name}</p>
+                      <p className="text-blue-500 text-sm">
+                        {member.role || "No position"}
+                      </p>
+                      <p className="text-gray-500 text-xs">{member.email}</p>
+                    </div>
+                  </div>
+
+                  <div className="gap-28 grid grid-cols-3 text-sm">
+                    <div className="text-center">
+                      <p className="font-bold mb-1">Contact No</p>
+                      <p>{member.phone_number || "—"}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-bold mb-1">Role</p>
+                      <p>{member.category || "—"}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-bold mb-1">Status</p>
+                      {member.is_signed_in ? (
+                        <div className="text-green-600">In Office</div>
+                      ) : (
+                        <div>—</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="lg"
+                      className="bg-blue-500 text-white hover:bg-blue-600"
+                      onClick={() => handleRegenerateOTP(member)}
+                      disabled={isLoadingGlobal}
+                    >
+                      {otpDisplay[member.id] ? (
+                        copiedUserId === member.id ? (
+                          <>Copied!</>
+                        ) : (
+                          `${otpDisplay[member.id]}`
+                        )
+                      ) : (
+                        <>Generate OTP</>
+                      )}
+                    </Button>
+                    <Button size="icon" variant="ghost" title="Edit user">
+                      <Edit className="w-4 h-4 text-gray-500" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() =>
+                        handleToggleUserStatus(
+                          member.id,
+                          member.is_active,
+                          member.name
+                        )
+                      }
+                      title={
+                        member.is_active ? "Deactivate user" : "Activate user"
+                      }
+                    >
+                      {member.is_active ? (
+                        <Trash className="w-4 h-4 text-red-500" />
+                      ) : (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      )}
+                    </Button>
+                  </div>
+                </Card>
+              ) : (
+                // Grid View - Vertical Card Layout
+                <Card key={member.id} className="p-6 transition rounded-lg">
+                  <div className="flex flex-col items-center text-center space-y-4">
+                    {/* User Info */}
+                    <div className="w-full flex flex-row justify-between">
                       <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
-                        {user.name
+                        {member.name
                           .split(" ")
-                          .map((n: string) => n[0])
+                          .map((n) => n[0])
                           .join("")
                           .toUpperCase()
                           .slice(0, 2)}
                       </div>
-                      <div>
-                        <p className="font-semibold text-lg">{user.name}</p>
-                        <p className="text-blue-500 text-sm">
-                          {(user as any).position || "No position"}
+                      <div className="flex flex-col text-left">
+                        <h3 className="font-semibold text-lg mb-1">
+                          {member.name}
+                        </h3>
+                        <p className="text-blue-500 text-sm mb-1">
+                          {member.role || "No position"}
                         </p>
-                        <p className="text-gray-500 text-xs">{user.email}</p>
+                        <p className="text-gray-500 text-sm mb-3">
+                          {member.email}
+                        </p>
+                      </div>
+
+                      <div className="flex justify-center gap-1">
+                        <Button size="icon" variant="ghost" title="Edit user">
+                          <Edit className="w-6 h-6 text-gray-500" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() =>
+                            handleToggleUserStatus(
+                              member.id,
+                              member.is_active,
+                              member.name
+                            )
+                          }
+                          title={
+                            member.is_active ? "Deactivate user" : "Activate user"
+                          }
+                        >
+                          {member.is_active ? (
+                            <Trash className="w-6 h-6 text-red-500" />
+                          ) : (
+                            <CheckCircle className="w-6 h-6 text-green-500" />
+                          )}
+                        </Button>
                       </div>
                     </div>
 
-                    <div className="gap-28 grid grid-cols-3 text-sm">
+                    <div className="gap-20 grid grid-cols-3 text-sm">
                       <div className="text-center">
-                        <p className="font-bold mb-1">Contact No</p>
-                        <p>{(user as any).contact || "—"}</p>
+                        <p className="font-bold mb-1 w-20">Contact No</p>
+                        <p>{member.phone_number || "—"}</p>
                       </div>
                       <div className="text-center">
                         <p className="font-bold mb-1">Role</p>
-                        <p>{user.department || "—"}</p>
+                        <p>{member.category || "—"}</p>
                       </div>
                       <div className="text-center">
                         <p className="font-bold mb-1">Status</p>
-                        {isPresent ? (
-                          <div className="text-green-600">In Office</div>
+                        {member.is_signed_in ? (
+                          <div className="text-green-600 w-20">In Office</div>
                         ) : (
                           <div>—</div>
                         )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* Actions */}
+                    <div className="w-full space-y-2">
                       <Button
-                        size="lg"
-                        className="bg-blue-500 text-white hover:bg-blue-600 w-[]"
-                        onClick={() => handleRegenerateOTP(user)}
+                        className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                        onClick={() => handleRegenerateOTP(member)}
                         disabled={isLoadingGlobal}
                       >
-                        {otpDisplay[user.id] ? (
-                          copiedUserId === user.id ? (
+                        {otpDisplay[member.id] ? (
+                          copiedUserId === member.id ? (
                             <>Copied!</>
                           ) : (
-                            `${otpDisplay[user.id]}`
+                            `${otpDisplay[member.id]}`
                           )
                         ) : (
                           <>Generate OTP</>
                         )}
                       </Button>
-                      <Button size="icon" variant="ghost" title="Edit user">
-                        <Edit className="w-4 h-4 text-gray-500" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() =>
-                          handleToggleUserStatus(
-                            user.id,
-                            user.isActive,
-                            user.name
-                          )
-                        }
-                        title={
-                          user.isActive ? "Deactivate user" : "Activate user"
-                        }
-                      >
-                        {user.isActive ? (
-                          <Trash className="w-4 h-4 text-red-500" />
-                        ) : (
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                        )}
-                      </Button>
                     </div>
-                  </Card>
-                ) : (
-                  // Grid View - Vertical Card Layout
-                  <Card key={user.id} className="p-6 transition rounded-lg">
-                    <div className="flex flex-col items-center text-center space-y-4">
-                      {/* User Info */}
-                      <div className="w-full flex flex-row justify-between">
-                        <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
-                          {user.name
-                            .split(" ")
-                            .map((n: string) => n[0])
-                            .join("")
-                            .toUpperCase()
-                            .slice(0, 2)}
-                        </div>
-                        <div className="flex flex-col text-left">
-                          <h3 className="font-semibold text-lg mb-1">
-                            {user.name}
-                          </h3>
-                          <p className="text-blue-500 text-sm mb-1">
-                            {(user as any).position || "No position"}
-                          </p>
-                          <p className="text-gray-500 text-sm mb-3">
-                            {user.email}
-                          </p>
-                        </div>
-
-                        <div className="flex justify-center gap-1">
-                          <Button size="icon" variant="ghost" title="Edit user">
-                            <Edit className="w-6 h-6 text-gray-500" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() =>
-                              handleToggleUserStatus(
-                                user.id,
-                                user.isActive,
-                                user.name
-                              )
-                            }
-                            title={
-                              user.isActive ? "Deactivate user" : "Activate user"
-                            }
-                          >
-                            {user.isActive ? (
-                              <Trash className="w-6 h-6 text-red-500" />
-                            ) : (
-                              <CheckCircle className="w-6 h-6 text-green-500" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="gap-20 grid grid-cols-3 text-sm">
-                        <div className="text-center">
-                          <p className="font-bold mb-1 w-20">Contact No</p>
-                          <p>{(user as any).contact || "—"}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="font-bold mb-1">Role</p>
-                          <p>{user.department || "—"}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="font-bold mb-1">Status</p>
-                          {isPresent ? (
-                            <div className="text-green-600 w-20">In Office</div>
-                          ) : (
-                            <div>—</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="w-full space-y-2">
-                        <Button
-                          className="w-full bg-blue-500 text-white hover:bg-blue-600"
-                          onClick={() => handleRegenerateOTP(user)}
-                          disabled={isLoadingGlobal}
-                        >
-                          {otpDisplay[user.id] ? (
-                            copiedUserId === user.id ? (
-                              <>Copied!</>
-                            ) : (
-                              `${otpDisplay[user.id]}`
-                            )
-                          ) : (
-                            <>Generate OTP</>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                )
+                  </div>
+                </Card>
               )
-            )}
-          </div>
-        )}
+            )
+          )}
+        </div>
       </div>
     </div>
   );

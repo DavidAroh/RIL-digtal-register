@@ -1,84 +1,91 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, CheckInRecord, getUsers, getCheckInRecords } from '@/lib/storage';
+import { getAllMembersWithStatus, getSignedInMembers, subscribeToVisitLogs, MemberWithStatus, SignedInMember } from '@/lib/admin-queries';
 
-export const useRealTimeUsers = () => {
-  const [users, setUsers] = useState<User[]>([]);
+export const useRealTimeMembers = () => {
+  const [members, setMembers] = useState<MemberWithStatus[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Initial load
-    setUsers(getUsers());
-
-    // Listen for updates
-    const handleUsersUpdate = (event: CustomEvent) => {
-      setUsers(event.detail);
+    const loadMembers = async () => {
+      try {
+        const data = await getAllMembersWithStatus();
+        setMembers(data);
+      } catch (error) {
+        console.error('Error loading members:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    window.addEventListener('usersUpdated', handleUsersUpdate as EventListener);
-    
+    loadMembers();
+
+    // Subscribe to real-time changes
+    const subscription = subscribeToVisitLogs(() => {
+      loadMembers();
+    });
+
     return () => {
-      window.removeEventListener('usersUpdated', handleUsersUpdate as EventListener);
+      subscription.unsubscribe();
     };
   }, []);
 
-  return users;
+  return { members, isLoading };
 };
 
-export const useRealTimeCheckIns = () => {
-  const [records, setRecords] = useState<CheckInRecord[]>([]);
+export const useRealTimeSignedIn = () => {
+  const [signedInMembers, setSignedInMembers] = useState<SignedInMember[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     // Initial load
-    setRecords(getCheckInRecords());
-
-    // Listen for updates
-    const handleCheckInUpdate = (event: CustomEvent) => {
-      setRecords(event.detail);
+    const loadSignedInMembers = async () => {
+      try {
+        const data = await getSignedInMembers();
+        setSignedInMembers(data);
+      } catch (error) {
+        console.error('Error loading signed in members:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    window.addEventListener('checkInRecordsUpdated', handleCheckInUpdate as EventListener);
-    
+    loadSignedInMembers();
+
+    // Subscribe to real-time changes
+    const subscription = subscribeToVisitLogs(() => {
+      loadSignedInMembers();
+    });
+
     return () => {
-      window.removeEventListener('checkInRecordsUpdated', handleCheckInUpdate as EventListener);
+      subscription.unsubscribe();
     };
   }, []);
 
-  return records;
+  return { signedInMembers, isLoading };
 };
 
 export const useRealTimeStats = () => {
-  const users = useRealTimeUsers();
-  const records = useRealTimeCheckIns();
+  const { members } = useRealTimeMembers();
+  const { signedInMembers } = useRealTimeSignedIn();
   
   const [stats, setStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    todayCheckIns: 0,
-    currentlyInOffice: 0,
+    totalMembers: 0,
+    activeMembers: 0,
+    todaySignIns: 0,
+    currentlySignedIn: 0,
   });
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayRecords = records.filter(record => record.date === today);
-    
-    // Calculate currently in office
-    const userStatusMap = new Map<string, boolean>();
-    todayRecords
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-      .forEach(record => {
-        userStatusMap.set(record.userId, record.action === 'check-in');
-      });
-    
-    const currentlyInOffice = Array.from(userStatusMap.values()).filter(Boolean).length;
-    
     setStats({
-      totalUsers: users.length,
-      activeUsers: users.filter(user => user.isActive).length,
-      todayCheckIns: todayRecords.filter(record => record.action === 'check-in').length,
-      currentlyInOffice,
+      totalMembers: members.length,
+      activeMembers: members.filter(m => m.is_active).length,
+      todaySignIns: signedInMembers.length,
+      currentlySignedIn: members.filter(m => m.is_signed_in).length,
     });
-  }, [users, records]);
+  }, [members, signedInMembers]);
 
   return stats;
 };

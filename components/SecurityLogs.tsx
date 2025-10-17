@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Filter, Download } from "lucide-react";
+import { adminLogout } from "@/lib/supabase";
 import AdminDashboard from "@/components/AdminDashboard";
 import ExistingUsers from "@/components/ExistingUsers";
 
@@ -18,6 +20,7 @@ interface SecurityLog {
 }
 
 export default function SecurityLogs() {
+  const router = useRouter();
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -81,6 +84,16 @@ export default function SecurityLogs() {
             </Button>
             <Button className="bg-blue-50 hover:bg-blue-200 text-blue-500 h-[40px] rounded-lg">
               Register New User
+            </Button>
+            <Button
+              variant="outline"
+              className="h-[40px] rounded-lg"
+              onClick={async () => {
+                await adminLogout();
+                router.push("/admin/login");
+              }}
+            >
+              Logout
             </Button>
           </div>
         </div>

@@ -30,21 +30,15 @@ import {
   RefreshCw,
   CheckCircle,
   XCircle,
-  LogOut,
 } from "lucide-react";
 import {
-  useRealTimeUsers,
-  useRealTimeCheckIns,
+  useRealTimeMembers,
+  useRealTimeSignedIn,
   useRealTimeStats,
 } from "@/hooks/useRealTime";
-import { useAdminMembers, useSignedInMembers } from "@/hooks/useAdminData";
-import {
-  addUser,
-  updateUser,
-  generateOTP,
-  User as UserType,
-  CheckInRecord,
-} from "@/lib/storage";
+import { supabase, adminLogout } from "@/lib/supabase";
+import { sendOTP } from "@/lib/member-auth";
+import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -52,12 +46,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { sendOTPEmail } from "@/lib/emailService";
-import { sendOTP as sendOTPService } from "@/lib/otp-service";
+import { simulateEmailSend } from "@/lib/emailService";
 import ExistingUsers from "@/components/ExistingUsers";
 import SecurityLogs from "@/components/SecurityLogs";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { supabase } from "@/lib/supabase";
 
 // Types
 type NewUserState = {
@@ -74,40 +65,12 @@ type MessageState = {
 };
 
 export default function AdminDashboard() {
-  const { logout } = useAdminAuth();
-  const { members, loading: membersLoading, error: membersError, refetch } = useAdminMembers();
-  const { signedInMembers } = useSignedInMembers();
-
+  const router = useRouter();
   const [logs, setLogs] = useState<NewUserState[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
-  const [todayVisitLogs, setTodayVisitLogs] = useState<any[]>([]);
-
-  // Keep old hooks for backward compatibility (if needed)
-  const users = useRealTimeUsers();
-  const records = useRealTimeCheckIns();
+  const { members, isLoading: membersLoading } = useRealTimeMembers();
+  const { signedInMembers, isLoading: signedInLoading } = useRealTimeSignedIn();
   const stats = useRealTimeStats();
-
-  // Fetch today's visit logs
-  useEffect(() => {
-    const fetchTodayVisitLogs = async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { data, error } = await supabase
-        .from('visit_logs')
-        .select('*')
-        .gte('sign_in_time', `${today}T00:00:00`)
-        .order('sign_in_time', { ascending: false });
-
-      if (!error && data) {
-        setTodayVisitLogs(data);
-      }
-    };
-
-    fetchTodayVisitLogs();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchTodayVisitLogs, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState<NewUserState>({
@@ -123,80 +86,22 @@ export default function AdminDashboard() {
   const [currentView, setCurrentView] = useState<"home" | "Users">("home");
   const [lastView, setLastView] = useState<"home" | "Logs">("home");
 
-  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const todayRecords = useMemo(
-    () => records.filter((r) => r.date === today),
-    [records, today]
-  );
-
-  const lastRecordByUser = useMemo(() => {
-    const sorted = [...todayRecords].sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    const map = new Map<string, CheckInRecord>();
-    sorted.forEach((r) => map.set(r.userId, r));
-    return map;
-  }, [todayRecords]);
-
-  const presentUserIds = useMemo(() => {
-    const sorted = [...todayRecords].sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    const present = new Set<string>();
-    sorted.forEach((r) => {
-      if (r.action === "check-in") present.add(r.userId);
-      else present.delete(r.userId);
-    });
-    return present;
-  }, [todayRecords]);
-
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-
-    // Use members from Supabase if available, otherwise fall back to localStorage users
-    const dataSource = members.length > 0 ? members : users;
-
-    const base = dataSource.map((u: any) => {
-      const last = lastRecordByUser.get(u.id);
-      const isPresent = presentUserIds.has(u.id) || (u.is_signed_in || false);
-
-      // Get today's visit logs for this member
-      const memberVisitLogs = todayVisitLogs.filter(log => log.member_id === u.id);
-      const latestVisit = memberVisitLogs[0]; // Already sorted by sign_in_time desc
-
-      return {
-        user: {
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          department: u.category || u.department || u.role,
-          isActive: u.is_active !== undefined ? u.is_active : u.isActive
-        },
-        isPresent,
-        lastRecord: last,
-        // Use visit logs data
-        signInTime: latestVisit?.sign_in_time || u.current_sign_in_time || null,
-        signOutTime: latestVisit?.sign_out_time || null,
-        visitId: latestVisit?.id || u.current_visit_id || null
-      };
-    });
-
     const filtered = normalizedQuery
-      ? base.filter(({ user }) => {
+      ? members.filter((member) => {
           const hay =
-            `${user.name} ${user.email} ${user.department}`.toLowerCase();
+            `${member.name} ${member.email} ${member.role || ''}`.toLowerCase();
           return hay.includes(normalizedQuery);
         })
-      : base;
+      : members;
 
     return filtered.sort((a, b) => {
-      if (a.isPresent !== b.isPresent) return a.isPresent ? -1 : 1;
-      if (a.user.isActive !== b.user.isActive) return a.user.isActive ? -1 : 1;
-      return a.user.name.localeCompare(b.user.name);
+      if (a.is_signed_in !== b.is_signed_in) return a.is_signed_in ? -1 : 1;
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+      return a.name.localeCompare(b.name);
     });
-  }, [members, users, lastRecordByUser, presentUserIds, query, todayVisitLogs]);
+  }, [members, query]);
 
   const isFormValid =
     newUser.name.trim() !== "" &&
@@ -217,65 +122,39 @@ export default function AdminDashboard() {
     }
     setIsLoadingGlobal(true);
     try {
-      // Validate category
-      const validCategories = ['staff', 'understudy', 'innovation_lab_user'];
-      const category = newUser.department.trim();
-
-      if (!category || !validCategories.includes(category)) {
-        throw new Error('Please select a valid role');
-      }
-
-      // Prepare member data
-      const memberData = {
+      const trimmed: NewUserState = {
         name: newUser.name.trim(),
-        email: newUser.email.trim().toLowerCase(),
-        phone_number: newUser.contact.trim() || null,
-        role: newUser.position.trim() || null,
-        category: category,
-        is_active: true,
+        email: newUser.email.trim(),
+        department: newUser.department.trim(),
+        contact: newUser.contact.trim(),
+        position: newUser.position.trim(),
       };
-
+      
       // Add member to Supabase
       const { data: member, error: memberError } = await supabase
         .from('members')
-        .insert(memberData)
+        .insert([{
+          name: trimmed.name,
+          email: trimmed.email,
+          phone_number: trimmed.contact || null,
+          role: trimmed.position || null,
+          category: trimmed.department as 'staff' | 'understudy' | 'innovation_lab_user',
+          is_active: true
+        }])
         .select()
         .single();
-
-      if (memberError) {
-        console.error('Supabase error:', memberError);
-
-        // Handle duplicate email error
-        if (memberError.code === '23505') {
-          throw new Error('This email is already registered. Please use a different email.');
-        }
-
-        throw new Error(memberError.message || 'Failed to add member to database');
-      }
-
-      if (!member) {
-        throw new Error('No member data returned from database');
-      }
-
-      // Send OTP via EmailJS
-      const otpResult = await sendOTPService(member.email, member.name);
-
-      if (otpResult.success) {
-        setMessage({
-          type: "success",
-          text: `Member registered successfully! OTP sent to ${member.email}`,
-        });
-
-        // Refresh members list
-        refetch();
-      } else {
-        setMessage({
-          type: "error",
-          text: `Member registered but failed to send OTP: ${otpResult.error}`,
-        });
-      }
-
-      // Reset form
+      
+      if (memberError) throw memberError;
+      
+      // Send OTP via Edge Function
+      const result = await sendOTP(trimmed.email);
+      const otp = result?.otp || result?.code || 'Sent';
+      
+      setMessage({
+        type: "success",
+        text: `User added successfully! OTP${otp !== 'Sent' ? `: ${otp}` : ''} sent to ${trimmed.email}`,
+      });
+      
       setNewUser({
         name: "",
         email: "",
@@ -284,11 +163,9 @@ export default function AdminDashboard() {
         position: "",
       });
       setIsAddUserOpen(false);
-    } catch (error: any) {
-      setMessage({
-        type: "error",
-        text: error.message || "Failed to register member"
-      });
+    } catch (error) {
+      console.error('Error adding user:', error);
+      setMessage({ type: "error", text: "Failed to add user" });
     } finally {
       setIsLoadingGlobal(false);
     }
@@ -333,7 +210,7 @@ export default function AdminDashboard() {
                   Register New User
                 </Button>
               </DialogTrigger>
-             <DialogContent>
+              <DialogContent>
               <DialogHeader>
                 <DialogTitle>Register New User</DialogTitle>
                 <DialogDescription>
@@ -428,10 +305,12 @@ export default function AdminDashboard() {
             </Dialog>
             <Button
               variant="outline"
-              className="h-[46px] gap-2"
-              onClick={logout}
+              className="h-[46px] rounded-lg"
+              onClick={async () => {
+                await adminLogout();
+                router.push("/admin/login");
+              }}
             >
-              <LogOut className="w-4 h-4" />
               Logout
             </Button>
           </div>
@@ -452,7 +331,7 @@ export default function AdminDashboard() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Daily Log</CardTitle>
-              <CardDescription>See who's signed in today</CardDescription>
+              <CardDescription>See who’s signed in today</CardDescription>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">
@@ -463,14 +342,7 @@ export default function AdminDashboard() {
               </Button>
             </div>
           </CardHeader>
-          {membersLoading ? (
-            <CardContent>
-              <div className="flex items-center justify-center py-8">
-                <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
-                <span className="ml-2 text-gray-500">Loading members...</span>
-              </div>
-            </CardContent>
-          ) : rows.length > 0 ? (
+          {members.length > 0 ? (
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="min-w-full border-collapse">
@@ -486,58 +358,38 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map(({ user, isPresent, lastRecord, signInTime, signOutTime }, idx) => (
-                      <tr key={user.id} className="border-b">
+                    {rows.map((member, idx) => (
+                      <tr key={member.id} className="border-b">
                         <td className="py-3 px-4 text-gray-400 ">{idx + 1}</td>
-                        <td className="py-3 px-4">{user.name}</td>
-                        <td className="py-3 px-4">{user.email}</td>
-                        <td className="py-3 px-4">{user.department}</td>
+                        <td className="py-3 px-4">{member.name}</td>
+                        <td className="py-3 px-4">{member.email}</td>
+                        <td className="py-3 px-4">{member.category}</td>
                         <td className="py-3 px-4">
-                          {signInTime ? (
-                            new Date(signInTime).toLocaleTimeString(
-                              "en-US",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )
-                          ) : lastRecord?.action === "check-in" ? (
-                            new Date(lastRecord.timestamp).toLocaleTimeString(
-                              "en-US",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )
-                          ) : (
-                            "—"
-                          )}
+                          {member.is_signed_in && member.current_sign_in_time
+                            ? new Date(member.current_sign_in_time).toLocaleTimeString(
+                                "en-US",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )
+                            : "—"}
                         </td>
                         <td className="py-3 px-4">
-                          {signOutTime ? (
-                            new Date(signOutTime).toLocaleTimeString(
-                              "en-US",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )
-                          ) : lastRecord?.action === "check-out" ? (
-                            new Date(lastRecord.timestamp).toLocaleTimeString(
-                              "en-US",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )
-                          ) : (
-                            "—"
-                          )}
+                          {member.current_sign_out_time
+                            ? new Date(member.current_sign_out_time).toLocaleTimeString(
+                                "en-US",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )
+                            : "—"}
                         </td>
                         <td className="py-3 px-4">
-                          {isPresent ? (
+                          {member.is_signed_in ? (
                             <span className="text-green-600">In Office</span>
-                          ) : signInTime || lastRecord ? (
+                          ) : member.current_sign_in_time ? (
                             "Complete"
                           ) : (
                             "—"
@@ -549,25 +401,12 @@ export default function AdminDashboard() {
                 </table>
               </div>
             </CardContent>
-          ) : membersError ? (
-            <CardContent>
-              <div className="py-10 text-center text-sm text-red-500">
-                <div className="flex flex-col items-center gap-3">
-                  <XCircle className="w-12 h-12" />
-                  <div>Error loading members: {membersError}</div>
-                  <Button onClick={refetch} variant="outline" size="sm">
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    Retry
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
           ) : (
             <CardContent>
               <div className="py-10 text-center text-sm text-muted-foreground">
                 <div className="flex flex-col items-center gap-3">
                   <img src="/Social 02.svg" alt="No users registered yet." />
-                  <div>No members registered yet. Click "Register New User" to add members.</div>
+                  <div>Looks like no one has signed in yet</div>
                 </div>
               </div>
             </CardContent>
