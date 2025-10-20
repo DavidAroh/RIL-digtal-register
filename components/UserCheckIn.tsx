@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -11,8 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { CheckCircle, User, UserCog } from "lucide-react";
+import { CheckCircle, User } from "lucide-react";
 import {
   InputOTP,
   InputOTPGroup,
@@ -29,7 +27,7 @@ interface UserSession {
 }
 
 export default function UserCheckIn() {
-  const [step, setStep] = useState<1 | 2 | 3>(1); // 3 = success confirmation screen
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [session, setSession] = useState<UserSession | null>(null);
@@ -168,16 +166,6 @@ export default function UserCheckIn() {
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      {/* Admin Link
-      <div className="absolute top-4 right-4">
-        <Link href="/admin">
-          <Button variant="outline" size="sm" className="gap-2">
-            <UserCog className="w-4 h-4" />
-            Admin
-          </Button>
-        </Link>
-      </div> */}
-      
       <div className="w-full max-w-sm flex justify-center">
         {!session ? (
           <Card className="shadow-none border-0">

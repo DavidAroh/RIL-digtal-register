@@ -1,19 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -33,12 +25,8 @@ import {
   Grid,
   List,
 } from "lucide-react";
-import {
-  useRealTimeMembers,
-  useRealTimeSignedIn,
-  useRealTimeStats,
-} from "@/hooks/useRealTime";
-import { supabase, adminLogout } from "@/lib/supabase";
+import { useRealTimeMembers } from "@/hooks/useRealTime";
+import { supabase } from "@/lib/supabase";
 import { sendOTP } from "@/lib/member-auth";
 import { MemberWithStatus } from "@/lib/admin-queries";
 import {
@@ -48,7 +36,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { simulateEmailSend } from "@/lib/emailService";
 import AdminDashboard from "@/components/AdminDashboard";
 import Image from "next/image";
 
@@ -67,10 +54,7 @@ type MessageState = {
 };
 
 export default function ExistingUsers() {
-  const { members, isLoading: membersLoading } = useRealTimeMembers();
-  const { signedInMembers, isLoading: signedInLoading } = useRealTimeSignedIn();
-  const stats = useRealTimeStats();
-  const router = useRouter();
+  const { members } = useRealTimeMembers();
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState<NewUserState>({
@@ -87,12 +71,6 @@ export default function ExistingUsers() {
     {}
   );
   const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
-
-  const formatTime = (timestamp: string) =>
-    new Date(timestamp).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
 
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -156,11 +134,16 @@ export default function ExistingUsers() {
       
       // Send OTP via Edge Function
       const result = await sendOTP(trimmed.email);
-      const otp = result?.otp || result?.code || 'Sent';
-
+      const otp = result?.otp_code || result?.otp || result?.code;
+      
+      // Display OTP on the newly created member's button
+      if (otp && member?.id) {
+        setOtpDisplay((prev) => ({ ...prev, [member.id]: otp }));
+      }
+      
       setMessage({
         type: "success",
-        text: `User added successfully! OTP${otp !== 'Sent' ? `: ${otp}` : ''} sent to ${trimmed.email}`,
+        text: `User added successfully!${otp ? ` OTP: ${otp}` : ''} sent to ${trimmed.email}`,
       });
       
       setNewUser({
@@ -185,14 +168,14 @@ export default function ExistingUsers() {
       // Send OTP via Supabase Edge Function
       const result = await sendOTP(member.email);
       
-      // The Edge Function should return the OTP
-      const newOTP = result?.otp || result?.code || 'Check email';
+      // Extract OTP from response - Edge Function returns 'otp_code' field
+      const newOTP = result?.otp_code || result?.otp || result?.code;
       
-      // Display OTP on button
-      setOtpDisplay((prev) => ({ ...prev, [member.id]: newOTP }));
+      if (newOTP) {
+        // Display OTP on button
+        setOtpDisplay((prev) => ({ ...prev, [member.id]: newOTP }));
 
-      // Copy to clipboard if we have the OTP
-      if (newOTP && newOTP !== 'Check email') {
+        // Copy to clipboard automatically
         try {
           if (navigator.clipboard && window.isSecureContext) {
             await navigator.clipboard.writeText(newOTP);
@@ -202,12 +185,17 @@ export default function ExistingUsers() {
         } catch (clipboardError) {
           console.warn("Failed to copy to clipboard:", clipboardError);
         }
-      }
 
-      setMessage({ 
-        type: "success", 
-        text: `OTP sent to ${member.email}${newOTP !== 'Check email' ? ` - OTP: ${newOTP}` : ''}` 
-      });
+        setMessage({ 
+          type: "success", 
+          text: `OTP sent to ${member.email} - OTP: ${newOTP}` 
+        });
+      } else {
+        setMessage({ 
+          type: "error", 
+          text: `OTP sent but not returned by server. Check email.` 
+        });
+      }
     } catch (error: any) {
       console.error("Error generating OTP:", error);
       setMessage({ 

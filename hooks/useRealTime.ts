@@ -1,17 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getAllMembersWithStatus, getSignedInMembers, subscribeToVisitLogs, MemberWithStatus, SignedInMember } from '@/lib/admin-queries';
+import { getMembersWithStatus, getSignedInMembers, subscribeToVisitLogs, MemberWithStatus, SignedInMember } from '@/lib/admin-queries';
 
 export const useRealTimeMembers = () => {
   const [members, setMembers] = useState<MemberWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Initial load
     const loadMembers = async () => {
       try {
-        const data = await getAllMembersWithStatus();
+        const data = await getMembersWithStatus();
         setMembers(data);
       } catch (error) {
         console.error('Error loading members:', error);
@@ -21,11 +20,7 @@ export const useRealTimeMembers = () => {
     };
 
     loadMembers();
-
-    // Subscribe to real-time changes
-    const subscription = subscribeToVisitLogs(() => {
-      loadMembers();
-    });
+    const subscription = subscribeToVisitLogs(() => void loadMembers());
 
     return () => {
       subscription.unsubscribe();
@@ -40,7 +35,6 @@ export const useRealTimeSignedIn = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Initial load
     const loadSignedInMembers = async () => {
       try {
         const data = await getSignedInMembers();
@@ -53,11 +47,7 @@ export const useRealTimeSignedIn = () => {
     };
 
     loadSignedInMembers();
-
-    // Subscribe to real-time changes
-    const subscription = subscribeToVisitLogs(() => {
-      loadSignedInMembers();
-    });
+    const subscription = subscribeToVisitLogs(() => void loadSignedInMembers());
 
     return () => {
       subscription.unsubscribe();
@@ -70,22 +60,11 @@ export const useRealTimeSignedIn = () => {
 export const useRealTimeStats = () => {
   const { members } = useRealTimeMembers();
   const { signedInMembers } = useRealTimeSignedIn();
-  
-  const [stats, setStats] = useState({
-    totalMembers: 0,
-    activeMembers: 0,
-    todaySignIns: 0,
-    currentlySignedIn: 0,
-  });
 
-  useEffect(() => {
-    setStats({
-      totalMembers: members.length,
-      activeMembers: members.filter(m => m.is_active).length,
-      todaySignIns: signedInMembers.length,
-      currentlySignedIn: members.filter(m => m.is_signed_in).length,
-    });
-  }, [members, signedInMembers]);
-
-  return stats;
+  return {
+    totalMembers: members.length,
+    activeMembers: members.filter(m => m.is_active).length,
+    todaySignIns: signedInMembers.length,
+    currentlySignedIn: members.filter(m => m.is_signed_in).length,
+  };
 };

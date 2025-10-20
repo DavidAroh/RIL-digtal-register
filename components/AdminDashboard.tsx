@@ -11,7 +11,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import {
   Dialog,
@@ -21,21 +20,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Users,
-  UserPlus,
-  Activity,
-  Clock,
-  RefreshCw,
-  CheckCircle,
-  XCircle,
-} from "lucide-react";
-import {
-  useRealTimeMembers,
-  useRealTimeSignedIn,
-  useRealTimeStats,
-} from "@/hooks/useRealTime";
+import { UserPlus, RefreshCw } from "lucide-react";
+import { useRealTimeMembers } from "@/hooks/useRealTime";
 import { supabase, adminLogout } from "@/lib/supabase";
 import { sendOTP } from "@/lib/member-auth";
 import { useRouter } from "next/navigation";
@@ -46,7 +32,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { simulateEmailSend } from "@/lib/emailService";
 import ExistingUsers from "@/components/ExistingUsers";
 import SecurityLogs from "@/components/SecurityLogs";
 
@@ -66,11 +51,7 @@ type MessageState = {
 
 export default function AdminDashboard() {
   const router = useRouter();
-  const [logs, setLogs] = useState<NewUserState[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const { members, isLoading: membersLoading } = useRealTimeMembers();
-  const { signedInMembers, isLoading: signedInLoading } = useRealTimeSignedIn();
-  const stats = useRealTimeStats();
+  const { members } = useRealTimeMembers();
 
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState<NewUserState>({
@@ -148,11 +129,11 @@ export default function AdminDashboard() {
       
       // Send OTP via Edge Function
       const result = await sendOTP(trimmed.email);
-      const otp = result?.otp || result?.code || 'Sent';
+      const otp = result?.otp_code || result?.otp || result?.code;
       
       setMessage({
         type: "success",
-        text: `User added successfully! OTP${otp !== 'Sent' ? `: ${otp}` : ''} sent to ${trimmed.email}`,
+        text: `User added successfully!${otp ? ` OTP: ${otp}` : ''} sent to ${trimmed.email}`,
       });
       
       setNewUser({
@@ -170,10 +151,6 @@ export default function AdminDashboard() {
       setIsLoadingGlobal(false);
     }
   };
-
-  const filteredLogs = logs.filter((log) =>
-    log.email.toLowerCase().includes(query.toLowerCase())
-  );
 
   useEffect(() => {
     if (message.text) {
@@ -414,7 +391,7 @@ export default function AdminDashboard() {
 
           <div className="flex justify-between items-center mt-4 text-sm text-gray-500">
             <span>
-              Showing {filteredLogs.length} of {logs.length}
+              Showing {rows.length} of {members.length}
             </span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">

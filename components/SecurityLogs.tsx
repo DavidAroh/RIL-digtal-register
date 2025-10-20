@@ -27,26 +27,10 @@ export default function SecurityLogs() {
   const [existingView, setExistingView] = useState<"home" | "Existing">("home");
 
   useEffect(() => {
-    // Fetch from API or DB later
     const fetchLogs = async () => {
       setLoading(true);
-      await new Promise((r) => setTimeout(r, 1000)); // simulate API delay
-      setLogs([
-        {
-          id: 1,
-          email: "shammahnei@gmail.com",
-          timestamp: "2025-08-12 09:45",
-          status: "Invalid OTP",
-          attempts: 3,
-        },
-        {
-          id: 2,
-          email: "udemejonah@gmail.com",
-          timestamp: "2025-08-12 09:42",
-          status: "Invalid OTP",
-          attempts: 1,
-        },
-      ]);
+      // TODO: Fetch security logs from Supabase
+      setLogs([]);
       setLoading(false);
     };
     fetchLogs();
