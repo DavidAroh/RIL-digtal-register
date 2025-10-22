@@ -13,6 +13,9 @@ export interface MemberWithStatus {
   current_sign_in_time: string | null
   current_sign_out_time: string | null
   created_at: string
+  otp_code: string | null
+  otp_expires_at: string | null
+  has_valid_otp: boolean
 }
 
 export interface SignedInMember {

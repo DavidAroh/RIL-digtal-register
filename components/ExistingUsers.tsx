@@ -132,18 +132,30 @@ export default function ExistingUsers() {
       
       if (memberError) throw memberError;
       
+      console.log('New member created:', member);
+      
       // Send OTP via Edge Function
       const result = await sendOTP(trimmed.email);
+      console.log('OTP result:', result);
       const otp = result?.otp_code || result?.otp || result?.code;
+      
+      console.log('Extracted OTP:', otp, 'for member ID:', member?.id);
       
       // Display OTP on the newly created member's button
       if (otp && member?.id) {
-        setOtpDisplay((prev) => ({ ...prev, [member.id]: otp }));
+        setOtpDisplay((prev) => {
+          const updated = { ...prev, [member.id]: otp };
+          console.log('Updated otpDisplay state:', updated);
+          return updated;
+        });
+        
+        // Wait a moment for real-time updates to propagate
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
       
       setMessage({
         type: "success",
-        text: `User added successfully!${otp ? ` OTP: ${otp}` : ''} sent to ${trimmed.email}`,
+        text: `User added successfully! OTP: ${otp || 'Check console'} sent to ${trimmed.email}`,
       });
       
       setNewUser({
@@ -455,12 +467,11 @@ export default function ExistingUsers() {
                 >
                   <div className="flex items-center gap-3">
                     {/* Avatar with initials */}
-                    <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
+                    <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium uppercase">
                       {member.name
                         .split(" ")
                         .map((n) => n[0])
                         .join("")
-                        .toUpperCase()
                         .slice(0, 2)}
                     </div>
                     <div>
@@ -497,12 +508,13 @@ export default function ExistingUsers() {
                       className="bg-blue-500 text-white hover:bg-blue-600"
                       onClick={() => handleRegenerateOTP(member)}
                       disabled={isLoadingGlobal}
+                      title={member.has_valid_otp ? `OTP: ${member.otp_code}` : 'Generate OTP'}
                     >
-                      {otpDisplay[member.id] ? (
+                      {member.has_valid_otp ? (
                         copiedUserId === member.id ? (
                           <>Copied!</>
                         ) : (
-                          `${otpDisplay[member.id]}`
+                          <>OTP: {member.otp_code}</>
                         )
                       ) : (
                         <>Generate OTP</>
@@ -611,12 +623,13 @@ export default function ExistingUsers() {
                         className="w-full bg-blue-500 text-white hover:bg-blue-600"
                         onClick={() => handleRegenerateOTP(member)}
                         disabled={isLoadingGlobal}
+                        title={otpDisplay[member.id] ? `OTP: ${otpDisplay[member.id]}` : 'Generate OTP'}
                       >
                         {otpDisplay[member.id] ? (
                           copiedUserId === member.id ? (
                             <>Copied!</>
                           ) : (
-                            `${otpDisplay[member.id]}`
+                            <>OTP: {otpDisplay[member.id]}</>
                           )
                         ) : (
                           <>Generate OTP</>
