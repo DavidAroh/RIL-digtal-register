@@ -1,29 +1,35 @@
 import { createClient } from '@supabase/supabase-js'
 
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Simple admin check - just check if authenticated
-export const isAuthenticated = async () => {
-  const { data: { session } } = await supabase.auth.getSession()
-  return !!session
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables')
 }
 
-// Admin login
-export const adminLogin = async (email: string, password: string) => {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+export const checkAuthentication = async (): Promise<boolean> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    return !!session
+  } catch (error) {
+    console.error('Authentication check failed:', error)
+    return false
+  }
+}
+
+export const performAdminLogin = async (email: string, password: string) => {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
-  
+
   if (error) throw error
   return data
 }
 
-// Admin logout
-export const adminLogout = async () => {
+export const performAdminLogout = async () => {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }

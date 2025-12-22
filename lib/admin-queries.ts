@@ -27,29 +27,51 @@ export interface SignedInMember {
   duration: string
 }
 
-// Get all members with their current status
-export const getMembersWithStatus = async (): Promise<MemberWithStatus[]> => {
-  const { data, error } = await supabase
-    .from('members_with_status')
-    .select('*')
-    .order('name')
-  
-  if (error) throw error
-  return data || []
+export const fetchMembersWithStatus = async (): Promise<MemberWithStatus[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('members_with_status')
+      .select('*')
+      .order('name')
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Failed to fetch members with status:', error)
+    throw error
+  }
 }
 
-// Get only currently signed-in members
-export const getSignedInMembers = async (): Promise<SignedInMember[]> => {
-  const { data, error } = await supabase
-    .rpc('get_signed_in_members')
-  
-  if (error) throw error
-  return data || []
+export const fetchSignedInMembers = async (): Promise<SignedInMember[]> => {
+  try {
+    const { data, error } = await supabase
+      .rpc('get_signed_in_members')
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Failed to fetch signed in members:', error)
+    throw error
+  }
 }
 
-// Subscribe to real-time changes in visit logs
-export const subscribeToVisitLogs = (callback: () => void) => {
-  const subscription = supabase
+export const fetchLatestVisitLogs = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('visit_logs')
+      .select('member_id, sign_in_time, sign_out_time')
+      .order('sign_in_time', { ascending: false })
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Failed to fetch visit logs:', error)
+    throw error
+  }
+}
+
+export const subscribeToVisitLogChanges = (callback: () => void) => {
+  return supabase
     .channel('visit_logs_changes')
     .on(
       'postgres_changes',
@@ -61,6 +83,4 @@ export const subscribeToVisitLogs = (callback: () => void) => {
       callback
     )
     .subscribe()
-  
-  return subscription
 }

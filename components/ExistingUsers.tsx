@@ -1,20 +1,20 @@
-"use client";
+'use client'
 
-import { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+  DialogTrigger
+} from '@/components/ui/dialog'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   UserPlus,
   RefreshCw,
@@ -23,201 +23,195 @@ import {
   Edit,
   ArrowLeft,
   Grid,
-  List,
-} from "lucide-react";
-import { useRealTimeMembers } from "@/hooks/useRealTime";
-import { supabase } from "@/lib/supabase";
-import { sendOTP } from "@/lib/member-auth";
-import { MemberWithStatus } from "@/lib/admin-queries";
+  List
+} from 'lucide-react'
+import { useRealTimeMembers } from '@/hooks/useRealTime'
+import { supabase } from '@/lib/supabase'
+import { sendOTPToEmail } from '@/lib/member-auth'
+import { MemberWithStatus } from '@/lib/admin-queries'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import AdminDashboard from "@/components/AdminDashboard";
-import Image from "next/image";
+  SelectValue
+} from '@/components/ui/select'
+import AdminDashboard from '@/components/AdminDashboard'
+import Image from 'next/image'
 
-// Local types
-type NewUserState = {
-  name: string;
-  email: string;
-  department: string;
-  contact: string;
-  position: string;
-};
+interface NewUserFormData {
+  name: string
+  email: string
+  department: string
+  contact: string
+  position: string
+}
 
-type MessageState = {
-  type: "success" | "error" | "";
-  text: string;
-};
+interface MessageState {
+  type: 'success' | 'error' | ''
+  text: string
+}
+
+type ViewMode = 'list' | 'grid'
+type ViewType = 'home' | 'Users'
+
+const INITIAL_USER_STATE: NewUserFormData = {
+  name: '',
+  email: '',
+  department: '',
+  contact: '',
+  position: ''
+}
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+const isFormValid = (user: NewUserFormData): boolean => {
+  return (
+    user.name.trim() !== '' &&
+    user.email.trim() !== '' &&
+    user.department.trim() !== ''
+  )
+}
 
 export default function ExistingUsers() {
-  const { members } = useRealTimeMembers();
+  const { members } = useRealTimeMembers()
 
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [newUser, setNewUser] = useState<NewUserState>({
-    name: "",
-    email: "",
-    department: "",
-    contact: "",
-    position: "",
-  });
-  const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
-  const [message, setMessage] = useState<MessageState>({ type: "", text: "" });
-  const [query, setQuery] = useState("");
-  const [otpDisplay, setOtpDisplay] = useState<{ [memberId: string]: string }>(
-    {}
-  );
-  const [copiedUserId, setCopiedUserId] = useState<string | null>(null);
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false)
+  const [newUser, setNewUser] = useState<NewUserFormData>(INITIAL_USER_STATE)
+  const [isLoadingGlobal, setIsLoadingGlobal] = useState(false)
+  const [message, setMessage] = useState<MessageState>({ type: '', text: '' })
+  const [query, setQuery] = useState('')
+  const [copiedUserId, setCopiedUserId] = useState<string | null>(null)
+  const [currentView, setCurrentView] = useState<ViewType>('home')
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
 
-  const rows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  const filteredMembers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
     const filtered = normalizedQuery
       ? members.filter((member) => {
-          const searchText = `${member.name} ${member.email} ${member.role || ""} ${member.category}`.toLowerCase();
-          return searchText.includes(normalizedQuery);
+          const searchText = `${member.name} ${member.email} ${member.role || ''} ${member.category}`.toLowerCase()
+          return searchText.includes(normalizedQuery)
         })
-      : members;
+      : members
 
     return filtered.sort((a, b) => {
-      if (a.is_signed_in !== b.is_signed_in) return a.is_signed_in ? -1 : 1;
-      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [members, query]);
-
-  const isFormValid =
-    newUser.name.trim() !== "" &&
-    newUser.email.trim() !== "" &&
-    newUser.department.trim() !== "";
-
-  const emailLooksValid = (email: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if (a.is_signed_in !== b.is_signed_in) return a.is_signed_in ? -1 : 1
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [members, query])
 
   const handleAddUser = async () => {
-    if (!isFormValid) {
-      setMessage({ type: "error", text: "Please fill in all required fields" });
-      return;
-    }
-    if (!emailLooksValid(newUser.email)) {
-      setMessage({ type: "error", text: "Enter a valid email address" });
-      return;
+    if (!isFormValid(newUser)) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields' })
+      return
     }
 
-    setIsLoadingGlobal(true);
+    if (!validateEmail(newUser.email)) {
+      setMessage({ type: 'error', text: 'Enter a valid email address' })
+      return
+    }
+
+    setIsLoadingGlobal(true)
     try {
-      const trimmed = {
+      const trimmedUser: NewUserFormData = {
         name: newUser.name.trim(),
         email: newUser.email.trim(),
         department: newUser.department.trim(),
         contact: newUser.contact.trim(),
-        position: newUser.position.trim(),
-      };
+        position: newUser.position.trim()
+      }
 
-      // Add member to Supabase
       const { data: member, error: memberError } = await supabase
         .from('members')
-        .insert([{
-          name: trimmed.name,
-          email: trimmed.email,
-          phone_number: trimmed.contact || null,
-          role: trimmed.position || null,
-          category: trimmed.department as 'staff' | 'understudy' | 'innovation_lab_user',
-          is_active: true
-        }])
+        .insert([
+          {
+            name: trimmedUser.name,
+            email: trimmedUser.email,
+            phone_number: trimmedUser.contact || null,
+            role: trimmedUser.position || null,
+            category: trimmedUser.department as
+              | 'staff'
+              | 'understudy'
+              | 'innovation_lab_user',
+            is_active: true
+          }
+        ])
         .select()
-        .single();
-      
-      if (memberError) throw memberError;
-      
-      console.log('New member created:', member);
-      
-      // Send OTP via Edge Function
-      const result = await sendOTP(trimmed.email);
-      console.log('OTP result:', result);
-      const otp = result?.otp_code || result?.otp || result?.code;
-      
-      console.log('Extracted OTP:', otp, 'for member ID:', member?.id);
-      
-      // Display OTP on the newly created member's button
-      if (otp && member?.id) {
-        setOtpDisplay((prev) => {
-          const updated = { ...prev, [member.id]: otp };
-          console.log('Updated otpDisplay state:', updated);
-          return updated;
-        });
-        
-        // Wait a moment for real-time updates to propagate
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-      
+        .single()
+
+      if (memberError) throw memberError
+
+      const otpResult = await sendOTPToEmail(trimmedUser.email)
+      const otp = otpResult?.otp_code || otpResult?.otp || otpResult?.code
+
       setMessage({
-        type: "success",
-        text: `User added successfully! OTP: ${otp || 'Check console'} sent to ${trimmed.email}`,
-      });
-      
-      setNewUser({
-        name: "",
-        email: "",
-        department: "",
-        contact: "",
-        position: "",
-      });
-      setIsAddUserOpen(false);
+        type: 'success',
+        text: `User added successfully! OTP: ${otp || 'Check console'} sent to ${trimmedUser.email}`
+      })
+
+      setNewUser(INITIAL_USER_STATE)
+      setIsAddUserOpen(false)
     } catch (error) {
-      console.error("Error adding user:", error);
-      setMessage({ type: "error", text: "Failed to add user" });
+      console.error('Error adding user:', error)
+      setMessage({ type: 'error', text: 'Failed to add user' })
     } finally {
-      setIsLoadingGlobal(false);
+      setIsLoadingGlobal(false)
     }
-  };
+  }
 
   const handleRegenerateOTP = async (member: MemberWithStatus) => {
-    setIsLoadingGlobal(true);
+    setIsLoadingGlobal(true)
     try {
-      // Send OTP via Supabase Edge Function
-      const result = await sendOTP(member.email);
-      
-      // Extract OTP from response - Edge Function returns 'otp_code' field
-      const newOTP = result?.otp_code || result?.otp || result?.code;
-      
-      if (newOTP) {
-        // Display OTP on button
-        setOtpDisplay((prev) => ({ ...prev, [member.id]: newOTP }));
+      const otpResult = await sendOTPToEmail(member.email)
+      const newOTP = otpResult?.otp_code || otpResult?.otp || otpResult?.code
 
-        // Copy to clipboard automatically
-        try {
-          if (navigator.clipboard && window.isSecureContext) {
-            await navigator.clipboard.writeText(newOTP);
-            setCopiedUserId(member.id);
-            setTimeout(() => setCopiedUserId(null), 2000);
-          }
-        } catch (clipboardError) {
-          console.warn("Failed to copy to clipboard:", clipboardError);
+      if (newOTP) {
+        // Update the member record with the new OTP
+        const { error: updateError } = await supabase
+          .from('members')
+          .update({
+            otp_code: newOTP,
+            otp_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes expiry
+          })
+          .eq('id', member.id)
+
+        if (updateError) {
+          console.warn('Failed to update OTP in database:', updateError)
         }
 
-        setMessage({ 
-          type: "success", 
-          text: `OTP sent to ${member.email} - OTP: ${newOTP}` 
-        });
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(newOTP)
+            setCopiedUserId(member.id)
+            setTimeout(() => setCopiedUserId(null), 2000)
+          }
+        } catch (clipboardError) {
+          console.warn('Failed to copy to clipboard:', clipboardError)
+        }
+
+        setMessage({
+          type: 'success',
+          text: `OTP sent to ${member.email} - OTP: ${newOTP}`
+        })
       } else {
-        setMessage({ 
-          type: "error", 
-          text: `OTP sent but not returned by server. Check email.` 
-        });
+        setMessage({
+          type: 'error',
+          text: 'OTP sent. Check email.'
+        })
       }
     } catch (error: any) {
-      console.error("Error generating OTP:", error);
-      setMessage({ 
-        type: "error", 
-        text: `Failed to send OTP: ${error.message || 'Unknown error'}` 
-      });
+      console.error('Error generating OTP:', error)
+      setMessage({
+        type: 'error',
+        text: `Failed to send OTP: ${error.message || 'Unknown error'}`
+      })
     } finally {
-      setIsLoadingGlobal(false);
+      setIsLoadingGlobal(false)
     }
-  };
+  }
 
   const handleToggleUserStatus = async (
     memberId: string,
@@ -228,39 +222,32 @@ export default function ExistingUsers() {
       const { error } = await supabase
         .from('members')
         .update({ is_active: !currentStatus })
-        .eq('id', memberId);
-      
-      if (error) throw error;
-      
+        .eq('id', memberId)
+
+      if (error) throw error
+
       setMessage({
-        type: "success",
-        text: `${memberName} ${
-          currentStatus ? "deactivated" : "activated"
-        } successfully`,
-      });
+        type: 'success',
+        text: `${memberName} ${currentStatus ? 'deactivated' : 'activated'} successfully`
+      })
     } catch (error) {
-      console.error("Error toggling member status:", error);
+      console.error('Error toggling member status:', error)
       setMessage({
-        type: "error",
-        text: "Failed to update member status",
-      });
+        type: 'error',
+        text: 'Failed to update member status'
+      })
     }
-  };
+  }
 
   useEffect(() => {
     if (message.text) {
-      const timer = setTimeout(() => setMessage({ type: "", text: "" }), 5000);
-      return () => clearTimeout(timer);
+      const timer = setTimeout(() => setMessage({ type: '', text: '' }), 5000)
+      return () => clearTimeout(timer)
     }
-  }, [message]);
+  }, [message])
 
-  const [currentView, setCurrentView] = useState<"home" | "Users" | "user">(
-    "home"
-  );
-  const [viewMode, setViewMode] = useState<"list" | "grid">("list");
-
-  if (currentView === "Users") {
-    return <AdminDashboard />;
+  if (currentView === 'Users') {
+    return <AdminDashboard />
   }
 
   return (
@@ -269,7 +256,11 @@ export default function ExistingUsers() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <Link href="/">
-            <img src="/RIL logo.svg" alt="Company Logo" className="w-medium cursor-pointer" />
+            <img
+              src="/RIL logo.svg"
+              alt="Company Logo"
+              className="w-medium cursor-pointer"
+            />
           </Link>
 
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
@@ -334,7 +325,9 @@ export default function ExistingUsers() {
                     <SelectContent>
                       <SelectItem value="staff">Staff</SelectItem>
                       <SelectItem value="understudy">Understudy</SelectItem>
-                      <SelectItem value="innovation_lab_user">Innovation Lab User</SelectItem>
+                      <SelectItem value="innovation_lab_user">
+                        Innovation Lab User
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -353,7 +346,7 @@ export default function ExistingUsers() {
                 <Button
                   onClick={handleAddUser}
                   className="w-full"
-                  disabled={isLoadingGlobal || !isFormValid}
+                  disabled={isLoadingGlobal || !isFormValid(newUser)}
                   aria-busy={isLoadingGlobal}
                 >
                   {isLoadingGlobal ? (
@@ -371,20 +364,19 @@ export default function ExistingUsers() {
               </div>
             </DialogContent>
           </Dialog>
-          
         </div>
 
         {message.text && (
           <Alert
             className={`mb-6 ${
-              message.type === "error"
-                ? "border-red-200 bg-red-50"
-                : "border-green-200 bg-green-50"
+              message.type === 'error'
+                ? 'border-green-200 bg-green-50'
+                : 'border-green-200 bg-green-50'
             }`}
           >
             <AlertDescription
               className={
-                message.type === "error" ? "text-red-800" : "text-green-800"
+                message.type === 'error' ? 'text-green-800' : 'text-green-800'
               }
             >
               {message.text}
@@ -396,7 +388,7 @@ export default function ExistingUsers() {
           <Button
             variant="ghost"
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            onClick={() => setCurrentView("Users")}
+            onClick={() => setCurrentView('Users')}
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -413,20 +405,19 @@ export default function ExistingUsers() {
             className="h-[48px] rounded-lg text-md flex-1"
           />
 
-          {/* View Mode Toggle */}
           <div className="flex bg-gray-100 rounded-lg p-1">
             <Button
-              variant={viewMode === "list" ? "default" : "ghost"}
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode("list")}
+              onClick={() => setViewMode('list')}
               className="px-3"
             >
               <List className="w-4 h-4" />
             </Button>
             <Button
-              variant={viewMode === "grid" ? "default" : "ghost"}
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode("grid")}
+              onClick={() => setViewMode('grid')}
               className="px-3"
             >
               <Grid className="w-4 h-4" />
@@ -437,12 +428,12 @@ export default function ExistingUsers() {
         {/* User Profile Cards */}
         <div
           className={
-            viewMode === "grid"
-              ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
-              : "space-y-4"
+            viewMode === 'grid'
+              ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'
+              : 'space-y-4'
           }
         >
-          {rows.length === 0 ? (
+          {filteredMembers.length === 0 ? (
             <div className="text-center py-12 text-gray-500 col-span-full">
               <Image
                 src="/Social 02.svg"
@@ -453,31 +444,29 @@ export default function ExistingUsers() {
               />
               <p>
                 {query
-                  ? "No users found matching your search"
-                  : "No users registered yet"}
+                  ? 'No users found matching your search'
+                  : 'No users registered yet'}
               </p>
             </div>
           ) : (
-            rows.map((member) =>
-              viewMode === "list" ? (
-                // List View - Horizontal Layout
+            filteredMembers.map((member) =>
+              viewMode === 'list' ? (
                 <Card
                   key={member.id}
                   className="flex items-center justify-between p-7 transition rounded-lg"
                 >
                   <div className="flex items-center gap-3">
-                    {/* Avatar with initials */}
                     <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium uppercase">
                       {member.name
-                        .split(" ")
+                        .split(' ')
                         .map((n) => n[0])
-                        .join("")
+                        .join('')
                         .slice(0, 2)}
                     </div>
                     <div>
                       <p className="font-semibold text-lg">{member.name}</p>
                       <p className="text-blue-500 text-sm">
-                        {member.role || "No position"}
+                        {member.role || 'No position'}
                       </p>
                       <p className="text-gray-500 text-xs">{member.email}</p>
                     </div>
@@ -486,11 +475,11 @@ export default function ExistingUsers() {
                   <div className="gap-28 grid grid-cols-3 text-sm">
                     <div className="text-center">
                       <p className="font-bold mb-1">Contact No</p>
-                      <p>{member.phone_number || "—"}</p>
+                      <p>{member.phone_number || '—'}</p>
                     </div>
                     <div className="text-center">
                       <p className="font-bold mb-1">Role</p>
-                      <p>{member.category || "—"}</p>
+                      <p>{member.category || '—'}</p>
                     </div>
                     <div className="text-center">
                       <p className="font-bold mb-1">Status</p>
@@ -503,22 +492,28 @@ export default function ExistingUsers() {
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {member.has_valid_otp ? (
+                      <div className="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold text-lg min-w-[120px] text-center">
+                        {member.otp_code}
+                      </div>
+                    ) : (
+                      <Button
+                        size="lg"
+                        className="bg-blue-500 text-white hover:bg-blue-600"
+                        onClick={() => handleRegenerateOTP(member)}
+                        disabled={isLoadingGlobal}
+                      >
+                        OTP
+                      </Button>
+                    )}
                     <Button
-                      size="lg"
-                      className="bg-blue-500 text-white hover:bg-blue-600"
+                      size="icon"
+                      variant="outline"
                       onClick={() => handleRegenerateOTP(member)}
                       disabled={isLoadingGlobal}
-                      title={member.has_valid_otp ? `OTP: ${member.otp_code}` : 'Generate OTP'}
+                      title="Regenerate OTP"
                     >
-                      {member.has_valid_otp ? (
-                        copiedUserId === member.id ? (
-                          <>Copied!</>
-                        ) : (
-                          <>OTP: {member.otp_code}</>
-                        )
-                      ) : (
-                        <>Generate OTP</>
-                      )}
+                      <RefreshCw className="w-4 h-4" />
                     </Button>
                     <Button size="icon" variant="ghost" title="Edit user">
                       <Edit className="w-4 h-4 text-gray-500" />
@@ -534,7 +529,7 @@ export default function ExistingUsers() {
                         )
                       }
                       title={
-                        member.is_active ? "Deactivate user" : "Activate user"
+                        member.is_active ? 'Deactivate user' : 'Activate user'
                       }
                     >
                       {member.is_active ? (
@@ -546,16 +541,14 @@ export default function ExistingUsers() {
                   </div>
                 </Card>
               ) : (
-                // Grid View - Vertical Card Layout
                 <Card key={member.id} className="p-6 transition rounded-lg">
                   <div className="flex flex-col items-center text-center space-y-4">
-                    {/* User Info */}
                     <div className="w-full flex flex-row justify-between">
                       <div className="h-20 w-20 rounded-full bg-blue-50 flex items-center justify-center text-gray-600 text-xl font-medium">
                         {member.name
-                          .split(" ")
+                          .split(' ')
                           .map((n) => n[0])
-                          .join("")
+                          .join('')
                           .toUpperCase()
                           .slice(0, 2)}
                       </div>
@@ -564,7 +557,7 @@ export default function ExistingUsers() {
                           {member.name}
                         </h3>
                         <p className="text-blue-500 text-sm mb-1">
-                          {member.role || "No position"}
+                          {member.role || 'No position'}
                         </p>
                         <p className="text-gray-500 text-sm mb-3">
                           {member.email}
@@ -586,7 +579,9 @@ export default function ExistingUsers() {
                             )
                           }
                           title={
-                            member.is_active ? "Deactivate user" : "Activate user"
+                            member.is_active
+                              ? 'Deactivate user'
+                              : 'Activate user'
                           }
                         >
                           {member.is_active ? (
@@ -601,11 +596,11 @@ export default function ExistingUsers() {
                     <div className="gap-20 grid grid-cols-3 text-sm">
                       <div className="text-center">
                         <p className="font-bold mb-1 w-20">Contact No</p>
-                        <p>{member.phone_number || "—"}</p>
+                        <p>{member.phone_number || '—'}</p>
                       </div>
                       <div className="text-center">
                         <p className="font-bold mb-1">Role</p>
-                        <p>{member.category || "—"}</p>
+                        <p>{member.category || '—'}</p>
                       </div>
                       <div className="text-center">
                         <p className="font-bold mb-1">Status</p>
@@ -617,23 +612,28 @@ export default function ExistingUsers() {
                       </div>
                     </div>
 
-                    {/* Actions */}
                     <div className="w-full space-y-2">
+                      {member.has_valid_otp ? (
+                        <div className="bg-blue-500 text-white px-4 py-2 rounded-lg font-semibold text-lg text-center w-full">
+                          {member.otp_code}
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                          onClick={() => handleRegenerateOTP(member)}
+                          disabled={isLoadingGlobal}
+                        >
+                          Generate OTP
+                        </Button>
+                      )}
                       <Button
-                        className="w-full bg-blue-500 text-white hover:bg-blue-600"
+                        className="w-full"
+                        variant="outline"
                         onClick={() => handleRegenerateOTP(member)}
                         disabled={isLoadingGlobal}
-                        title={otpDisplay[member.id] ? `OTP: ${otpDisplay[member.id]}` : 'Generate OTP'}
                       >
-                        {otpDisplay[member.id] ? (
-                          copiedUserId === member.id ? (
-                            <>Copied!</>
-                          ) : (
-                            <>OTP: {otpDisplay[member.id]}</>
-                          )
-                        ) : (
-                          <>Generate OTP</>
-                        )}
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Regenerate OTP
                       </Button>
                     </div>
                   </div>
@@ -644,5 +644,5 @@ export default function ExistingUsers() {
         </div>
       </div>
     </div>
-  );
+  )
 }

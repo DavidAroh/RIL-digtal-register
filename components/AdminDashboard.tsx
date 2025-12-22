@@ -1,169 +1,174 @@
-"use client";
+'use client'
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from 'react'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Link from "next/link";
+  CardTitle
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import Link from 'next/link'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { UserPlus, RefreshCw } from "lucide-react";
-import { useRealTimeMembers } from "@/hooks/useRealTime";
-import { supabase, adminLogout } from "@/lib/supabase";
-import { sendOTP } from "@/lib/member-auth";
-import { useRouter } from "next/navigation";
+  DialogTrigger
+} from '@/components/ui/dialog'
+import { UserPlus, RefreshCw } from 'lucide-react'
+import { useRealTimeMembers } from '@/hooks/useRealTime'
+import { supabase, performAdminLogout } from '@/lib/supabase'
+import { sendOTPToEmail } from '@/lib/member-auth'
+import { useRouter } from 'next/navigation'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import ExistingUsers from "@/components/ExistingUsers";
-import SecurityLogs from "@/components/SecurityLogs";
+  SelectValue
+} from '@/components/ui/select'
+import ExistingUsers from '@/components/ExistingUsers'
+import SecurityLogs from '@/components/SecurityLogs'
 
-// Types
-type NewUserState = {
-  name: string;
-  email: string;
-  department: string;
-  contact: string;
-  position: string;
-};
+interface NewUserFormData {
+  name: string
+  email: string
+  department: string
+  contact: string
+  position: string
+}
 
-type MessageState = {
-  type: "success" | "error" | "";
-  text: string;
-};
+interface MessageState {
+  type: 'success' | 'error' | ''
+  text: string
+}
+
+type ViewType = 'home' | 'Users' | 'Logs'
+
+const INITIAL_USER_STATE: NewUserFormData = {
+  name: '',
+  email: '',
+  department: '',
+  contact: '',
+  position: ''
+}
+
+const validateEmail = (email: string): boolean => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+const isFormValid = (user: NewUserFormData): boolean => {
+  return (
+    user.name.trim() !== '' &&
+    user.email.trim() !== '' &&
+    user.department.trim() !== ''
+  )
+}
 
 export default function AdminDashboard() {
-  const router = useRouter();
-  const { members } = useRealTimeMembers();
+  const router = useRouter()
+  const { members } = useRealTimeMembers()
 
-  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [newUser, setNewUser] = useState<NewUserState>({
-    name: "",
-    email: "",
-    department: "",
-    contact: "",
-    position: "",
-  });
-  const [isLoadingGlobal, setIsLoadingGlobal] = useState(false);
-  const [message, setMessage] = useState<MessageState>({ type: "", text: "" });
-  const [query, setQuery] = useState("");
-  const [currentView, setCurrentView] = useState<"home" | "Users">("home");
-  const [lastView, setLastView] = useState<"home" | "Logs">("home");
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false)
+  const [newUser, setNewUser] = useState<NewUserFormData>(INITIAL_USER_STATE)
+  const [isLoadingGlobal, setIsLoadingGlobal] = useState(false)
+  const [message, setMessage] = useState<MessageState>({ type: '', text: '' })
+  const [query, setQuery] = useState('')
+  const [currentView, setCurrentView] = useState<ViewType>('home')
 
-  const rows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+  const filteredMembers = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
     const filtered = normalizedQuery
       ? members.filter((member) => {
-          const hay =
-            `${member.name} ${member.email} ${member.role || ''}`.toLowerCase();
-          return hay.includes(normalizedQuery);
+          const searchText = `${member.name} ${member.email} ${member.role || ''}`.toLowerCase()
+          return searchText.includes(normalizedQuery)
         })
-      : members;
+      : members
 
     return filtered.sort((a, b) => {
-      if (a.is_signed_in !== b.is_signed_in) return a.is_signed_in ? -1 : 1;
-      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-  }, [members, query]);
-
-  const isFormValid =
-    newUser.name.trim() !== "" &&
-    newUser.email.trim() !== "" &&
-    newUser.department.trim() !== "";
-
-  const emailLooksValid = (email: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if (a.is_signed_in !== b.is_signed_in) return a.is_signed_in ? -1 : 1
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [members, query])
 
   const handleAddUser = async () => {
-    if (!isFormValid) {
-      setMessage({ type: "error", text: "Please fill in all required fields" });
-      return;
+    if (!isFormValid(newUser)) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields' })
+      return
     }
-    if (!emailLooksValid(newUser.email)) {
-      setMessage({ type: "error", text: "Enter a valid email address" });
-      return;
+
+    if (!validateEmail(newUser.email)) {
+      setMessage({ type: 'error', text: 'Enter a valid email address' })
+      return
     }
-    setIsLoadingGlobal(true);
+
+    setIsLoadingGlobal(true)
     try {
-      const trimmed: NewUserState = {
+      const trimmedUser: NewUserFormData = {
         name: newUser.name.trim(),
         email: newUser.email.trim(),
         department: newUser.department.trim(),
         contact: newUser.contact.trim(),
-        position: newUser.position.trim(),
-      };
-      
-      // Add member to Supabase
+        position: newUser.position.trim()
+      }
+
       const { data: member, error: memberError } = await supabase
         .from('members')
-        .insert([{
-          name: trimmed.name,
-          email: trimmed.email,
-          phone_number: trimmed.contact || null,
-          role: trimmed.position || null,
-          category: trimmed.department as 'staff' | 'understudy' | 'innovation_lab_user',
-          is_active: true
-        }])
+        .insert([
+          {
+            name: trimmedUser.name,
+            email: trimmedUser.email,
+            phone_number: trimmedUser.contact || null,
+            role: trimmedUser.position || null,
+            category: trimmedUser.department as
+              | 'staff'
+              | 'understudy'
+              | 'innovation_lab_user',
+            is_active: true
+          }
+        ])
         .select()
-        .single();
-      
-      if (memberError) throw memberError;
-      
-      // Send OTP via Edge Function
-      const result = await sendOTP(trimmed.email);
-      const otp = result?.otp_code || result?.otp || result?.code;
-      
+        .single()
+
+      if (memberError) throw memberError
+
+      const otpResult = await sendOTPToEmail(trimmedUser.email)
+      const otp = otpResult?.otp_code || otpResult?.otp || otpResult?.code
+
       setMessage({
-        type: "success",
-        text: `User added successfully!${otp ? ` OTP: ${otp}` : ''} sent to ${trimmed.email}`,
-      });
-      
-      setNewUser({
-        name: "",
-        email: "",
-        department: "",
-        contact: "",
-        position: "",
-      });
-      setIsAddUserOpen(false);
+        type: 'success',
+        text: `User added successfully!${otp ? ` OTP: ${otp}` : ''} sent to ${trimmedUser.email}`
+      })
+
+      setNewUser(INITIAL_USER_STATE)
+      setIsAddUserOpen(false)
     } catch (error) {
-      console.error('Error adding user:', error);
-      setMessage({ type: "error", text: "Failed to add user" });
+      console.error('Error adding user:', error)
+      setMessage({ type: 'error', text: 'Failed to add user' })
     } finally {
-      setIsLoadingGlobal(false);
+      setIsLoadingGlobal(false)
     }
-  };
+  }
 
   useEffect(() => {
     if (message.text) {
-      const timer = setTimeout(() => setMessage({ type: "", text: "" }), 5000);
-      return () => clearTimeout(timer);
+      const timer = setTimeout(() => setMessage({ type: '', text: '' }), 5000)
+      return () => clearTimeout(timer)
     }
-  }, [message]);
+  }, [message])
 
-  if (currentView === "Users") {
-    return <ExistingUsers />;
+  if (currentView === 'Users') {
+    return <ExistingUsers />
   }
-  if (lastView === "Logs") {
-    return <SecurityLogs />;
+
+  if (currentView === 'Logs') {
+    return <SecurityLogs />
   }
 
   return (
@@ -172,12 +177,16 @@ export default function AdminDashboard() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <Link href="/">
-            <img src="/RIL logo.svg" alt="Logo" className="h-15 cursor-pointer" />
+            <img
+              src="/RIL logo.svg"
+              alt="Logo"
+              className="h-15 cursor-pointer"
+            />
           </Link>
           <div className="flex items-center gap-3">
             <Button
               className="bg-blue-500 h-[46px] rounded-lg"
-              onClick={() => setCurrentView("Users")}
+              onClick={() => setCurrentView('Users')}
             >
               Manage Existing Users
             </Button>
@@ -188,104 +197,106 @@ export default function AdminDashboard() {
                 </Button>
               </DialogTrigger>
               <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Register New User</DialogTitle>
-                <DialogDescription>
-                  Create a new user account and send OTP via email
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Full Name *</Label>
-                  <Input
-                    id="name"
-                    value={newUser.name}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, name: e.target.value })
-                    }
-                    placeholder="John Doe"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email Address *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={newUser.email}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, email: e.target.value })
-                    }
-                    placeholder="john@company.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="contact">Contact No</Label>
-                  <Input
-                    id="contact"
-                    value={newUser.contact}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, contact: e.target.value })
-                    }
-                    placeholder="Enter phone number"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="department">Role *</Label>
-                  <Select
-                    value={newUser.department}
-                    onValueChange={(value) =>
-                      setNewUser({ ...newUser, department: value })
-                    }
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="staff">Staff</SelectItem>
-                      <SelectItem value="understudy">Understudy</SelectItem>
-                      <SelectItem value="innovation_lab_user">Innovation Lab User</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <DialogHeader>
+                  <DialogTitle>Register New User</DialogTitle>
+                  <DialogDescription>
+                    Create a new user account and send OTP via email
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name">Full Name *</Label>
+                    <Input
+                      id="name"
+                      value={newUser.name}
+                      onChange={(e) =>
+                        setNewUser({ ...newUser, name: e.target.value })
+                      }
+                      placeholder="John Doe"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email Address *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) =>
+                        setNewUser({ ...newUser, email: e.target.value })
+                      }
+                      placeholder="john@company.com"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="contact">Contact No</Label>
+                    <Input
+                      id="contact"
+                      value={newUser.contact}
+                      onChange={(e) =>
+                        setNewUser({ ...newUser, contact: e.target.value })
+                      }
+                      placeholder="Enter phone number"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="department">Role *</Label>
+                    <Select
+                      value={newUser.department}
+                      onValueChange={(value) =>
+                        setNewUser({ ...newUser, department: value })
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="staff">Staff</SelectItem>
+                        <SelectItem value="understudy">Understudy</SelectItem>
+                        <SelectItem value="innovation_lab_user">
+                          Innovation Lab User
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div>
-                  <Label htmlFor="position">Position</Label>
-                  <Input
-                    id="position"
-                    value={newUser.position}
-                    onChange={(e) =>
-                      setNewUser({ ...newUser, position: e.target.value })
-                    }
-                    placeholder="e.g. Programs Manager, Visitor"
-                  />
+                  <div>
+                    <Label htmlFor="position">Position</Label>
+                    <Input
+                      id="position"
+                      value={newUser.position}
+                      onChange={(e) =>
+                        setNewUser({ ...newUser, position: e.target.value })
+                      }
+                      placeholder="e.g. Programs Manager, Visitor"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleAddUser}
+                    className="w-full"
+                    disabled={isLoadingGlobal || !isFormValid(newUser)}
+                    aria-busy={isLoadingGlobal}
+                  >
+                    {isLoadingGlobal ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Creating User...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4 mr-2" />
+                        Register User & Send OTP
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  onClick={handleAddUser}
-                  className="w-full"
-                  disabled={isLoadingGlobal || !isFormValid}
-                  aria-busy={isLoadingGlobal}
-                >
-                  {isLoadingGlobal ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                      Creating User...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Register User & Send OTP
-                    </>
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
+              </DialogContent>
             </Dialog>
             <Button
               variant="outline"
               className="h-[46px] rounded-lg"
               onClick={async () => {
-                await adminLogout();
-                router.push("/admin/login");
+                await performAdminLogout()
+                router.push('/admin/login')
               }}
             >
               Logout
@@ -308,7 +319,7 @@ export default function AdminDashboard() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>Daily Log</CardTitle>
-              <CardDescription>See who’s signed in today</CardDescription>
+              <CardDescription>See who's signed in today</CardDescription>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">
@@ -335,41 +346,39 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((member, idx) => (
+                    {filteredMembers.map((member, idx) => (
                       <tr key={member.id} className="border-b">
-                        <td className="py-3 px-4 text-gray-400 ">{idx + 1}</td>
+                        <td className="py-3 px-4 text-gray-400">{idx + 1}</td>
                         <td className="py-3 px-4">{member.name}</td>
                         <td className="py-3 px-4">{member.email}</td>
                         <td className="py-3 px-4">{member.category}</td>
                         <td className="py-3 px-4">
                           {member.is_signed_in && member.current_sign_in_time
-                            ? new Date(member.current_sign_in_time).toLocaleTimeString(
-                                "en-US",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )
-                            : "—"}
+                            ? new Date(
+                                member.current_sign_in_time
+                              ).toLocaleTimeString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : '—'}
                         </td>
                         <td className="py-3 px-4">
                           {member.current_sign_out_time
-                            ? new Date(member.current_sign_out_time).toLocaleTimeString(
-                                "en-US",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                }
-                              )
-                            : "—"}
+                            ? new Date(
+                                member.current_sign_out_time
+                              ).toLocaleTimeString('en-US', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : '—'}
                         </td>
                         <td className="py-3 px-4">
                           {member.is_signed_in ? (
                             <span className="text-green-600">In Office</span>
                           ) : member.current_sign_in_time ? (
-                            "Complete"
+                            'Complete'
                           ) : (
-                            "—"
+                            '—'
                           )}
                         </td>
                       </tr>
@@ -391,7 +400,7 @@ export default function AdminDashboard() {
 
           <div className="flex justify-between items-center mt-4 text-sm text-gray-500">
             <span>
-              Showing {rows.length} of {members.length}
+              Showing {filteredMembers.length} of {members.length}
             </span>
             <div className="flex gap-2">
               <Button variant="outline" size="sm">
@@ -412,22 +421,22 @@ export default function AdminDashboard() {
         </Card>
 
         {/* More Options */}
-        <div className="mt-8 bg-">
+        <div className="mt-8">
           <h2 className="text-sm font-medium mb-2">More Options</h2>
           <div className="rounded-lg bg-blue-50 p-2">
             <Button
               variant="ghost"
               className="text-blue-600 p-0 ml-2"
-              onClick={() => setLastView("Logs")}
+              onClick={() => setCurrentView('Logs')}
             >
               Security Logs
             </Button>
-            <p className="text-sm text-foreground ml-2 relative bottom-2 ">
+            <p className="text-sm text-foreground ml-2 relative bottom-2">
               View Invalid OTP attempts
             </p>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }

@@ -1,168 +1,215 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { CheckCircle, User } from "lucide-react";
+  CardTitle
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { CheckCircle, User } from 'lucide-react'
 import {
   InputOTP,
   InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
-import { sendOTP, verifyOTP, signInMember, signOutMember } from "@/lib/member-auth";
+  InputOTPSlot
+} from '@/components/ui/input-otp'
+import {
+  sendOTPToEmail,
+  verifyOTPCode,
+  performMemberSignIn,
+  performMemberSignOut
+} from '@/lib/member-auth'
 
 interface UserSession {
-  email: string;
-  name: string;
-  isSignedIn: boolean;
-  visitId?: string;
-  signInTime?: string;
+  email: string
+  name: string
+  isSignedIn: boolean
+  visitId?: string
+  signInTime?: string
 }
 
+type AuthStep = 1 | 2 | 3
+
 export default function UserCheckIn() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [session, setSession] = useState<UserSession | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [step, setStep] = useState<AuthStep>(1)
+  const [email, setEmail] = useState('')
+  const [otp, setOtp] = useState('')
+  const [session, setSession] = useState<UserSession | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState({ type: '', text: '' })
+  const [currentTime, setCurrentTime] = useState(new Date())
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const sessionData = localStorage.getItem('user_session');
+      const sessionData = localStorage.getItem('user_session')
       if (sessionData) {
-        setSession(JSON.parse(sessionData));
+        try {
+          setSession(JSON.parse(sessionData))
+        } catch (err) {
+          console.error('Failed to parse session:', err)
+          localStorage.removeItem('user_session')
+        }
       }
     }
+
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+      setCurrentTime(new Date())
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     if (message.text) {
-      const timer = setTimeout(() => setMessage({ type: "", text: "" }), 4000);
-      return () => clearTimeout(timer);
+      const timer = setTimeout(() => setMessage({ type: '', text: '' }), 4000)
+      return () => clearTimeout(timer)
     }
-  }, [message]);
+  }, [message])
 
   const handleEmailNext = async () => {
-    if (!email) {
-      setMessage({ type: "error", text: "Email is required" });
-      return;
+    if (!email.trim()) {
+      setMessage({ type: 'error', text: 'Email is required' })
+      return
     }
-    setIsLoading(true);
+
+    setIsLoading(true)
     try {
-      await sendOTP(email);
-      setMessage({ type: "success", text: "OTP sent to your email" });
-      setStep(2);
+      await sendOTPToEmail(email)
+      setMessage({ type: 'success', text: 'OTP sent to your email' })
+      setStep(2)
     } catch (error) {
-      setMessage({ type: "error", text: "Failed to send OTP" });
+      console.error('Error sending OTP:', error)
+      setMessage({ type: 'error', text: 'Failed to send OTP' })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleLogin = async () => {
-    if (!email || !otp) {
-      setMessage({ type: "error", text: "Please enter OTP" });
-      return;
+    if (!email.trim() || !otp.trim()) {
+      setMessage({ type: 'error', text: 'Please enter OTP' })
+      return
     }
-    setIsLoading(true);
+
+    setIsLoading(true)
     try {
-      // Verify OTP first
-      const verifyResult = await verifyOTP(email, otp);
-      
+      const verifyResult = await verifyOTPCode(email, otp)
+
       if (verifyResult) {
-        // Sign in the member
-        const signInResult = await signInMember(email);
-        
+        const signInResult = await performMemberSignIn(email)
+
         const userSession: UserSession = {
           email: email,
-          name: signInResult.member_name,
+          name: signInResult?.member_name || 'User',
           isSignedIn: true,
-          visitId: signInResult.id,
-          signInTime: signInResult.sign_in_time,
-        };
-        
-        // Save to localStorage for session persistence
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('user_session', JSON.stringify(userSession));
+          visitId: signInResult?.id,
+          signInTime: signInResult?.sign_in_time
         }
-        
-        setSession(userSession);
-        setStep(3); // Show success confirmation screen
+
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('user_session', JSON.stringify(userSession))
+        }
+
+        setSession(userSession)
+        setStep(3)
         setTimeout(() => {
-          setStep(1); // Go back to main view
-        }, 2000);
-        setEmail("");
-        setOtp("");
+          setStep(1)
+        }, 2000)
+        setEmail('')
+        setOtp('')
+        setMessage({
+          type: 'success',
+          text: 'Signed in successfully!'
+        })
       } else {
-        setMessage({ type: "error", text: "Invalid OTP" });
+        setMessage({ type: 'error', text: 'Invalid OTP' })
       }
     } catch (error) {
-      console.error('Login error:', error);
-      setMessage({ type: "error", text: "Login failed" });
+      console.error('Login error:', error)
+      setMessage({ type: 'error', text: 'Login failed' })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
-  const handleSignOut = async () => {
-    if (!session) return;
-    setIsLoading(true);
+  const handleSignInFromSession = async () => {
+    if (!session) return
+
+    setIsLoading(true)
     try {
-      await signOutMember(session.email);
-      
+      const signInResult = await performMemberSignIn(session.email)
+
       const updatedSession = {
         ...session,
-        isSignedIn: false,
-      };
-      
-      // Update localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('user_session', JSON.stringify(updatedSession));
+        isSignedIn: true,
+        visitId: signInResult?.id,
+        signInTime: signInResult?.sign_in_time
       }
-      
-      setSession(updatedSession);
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user_session', JSON.stringify(updatedSession))
+      }
+
+      setSession(updatedSession)
       setMessage({
-        type: "success",
-        text: "Successfully signed out!",
-      });
+        type: 'success',
+        text: 'Signed in successfully!'
+      })
     } catch (error) {
-      console.error('Sign out error:', error);
-      setMessage({ type: "error", text: "Sign out failed" });
+      console.error('Sign in error:', error)
+      setMessage({ type: 'error', text: 'Sign in failed' })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
+
+  const handleSignOut = async () => {
+    if (!session) return
+
+    setIsLoading(true)
+    try {
+      await performMemberSignOut(session.email)
+
+      const updatedSession = {
+        ...session,
+        isSignedIn: false
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user_session', JSON.stringify(updatedSession))
+      }
+
+      setSession(updatedSession)
+      setMessage({
+        type: 'success',
+        text: 'Successfully signed out!'
+      })
+    } catch (error) {
+      console.error('Sign out error:', error)
+      setMessage({ type: 'error', text: 'Sign out failed' })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('user_session');
+      localStorage.removeItem('user_session')
     }
-    setSession(null);
-    setStep(1);
-    setMessage({ type: "success", text: "Logged out successfully" });
-  };
+    setSession(null)
+    setStep(1)
+    setMessage({ type: 'success', text: 'Logged out successfully' })
+  }
 
   const formatTime = (time: Date) =>
-    time.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-
-    
+    time.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
@@ -185,7 +232,7 @@ export default function UserCheckIn() {
               {message.text && (
                 <p
                   className={`text-sm text-center ${
-                    message.type === "error" ? "text-red-500" : "text-green-600"
+                    message.type === 'error' ? 'text-red-500' : 'text-green-600'
                   }`}
                 >
                   {message.text}
@@ -197,11 +244,10 @@ export default function UserCheckIn() {
                   alt="Background Logo"
                   className="w-[3666px] relative bottom-4"
                 />
-                {/* Back Button */}
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="absolute top-4 left-4 flex items-center text-gray-00 hover:text-gray-900"
+                  className="absolute top-4 left-4 flex items-center text-gray-600 hover:text-gray-900"
                 >
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -229,7 +275,11 @@ export default function UserCheckIn() {
                     placeholder="Enter your email"
                     className="w-full h-12 rounded-4"
                   />
-                  <Button onClick={handleEmailNext} className="w-[276px] h-12">
+                  <Button
+                    onClick={handleEmailNext}
+                    className="w-[276px] h-12"
+                    disabled={isLoading}
+                  >
                     Next
                   </Button>
                 </>
@@ -256,8 +306,9 @@ export default function UserCheckIn() {
                   <Button
                     onClick={handleLogin}
                     className="w-full h-12 bg-blue-600 hover:bg-blue-700"
+                    disabled={isLoading}
                   >
-                    {isLoading ? "Verifying..." : "Sign in"}
+                    {isLoading ? 'Verifying...' : 'Sign in'}
                   </Button>
                 </>
               )}
@@ -294,15 +345,22 @@ export default function UserCheckIn() {
                   {formatTime(currentTime)}
                 </div>
               </div>
-              {session.isSignedIn && (
+              <div className="space-y-3">
+                <Button
+                  onClick={handleSignInFromSession}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Signing in...' : 'Sign In'}
+                </Button>
                 <Button
                   onClick={handleSignOut}
                   className="w-full bg-red-600 hover:bg-red-700"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Signing out..." : "Sign Out"}
+                  {isLoading ? 'Signing out...' : 'Sign Out'}
                 </Button>
-              )}
+              </div>
               <Button
                 onClick={handleLogout}
                 variant="outline"
@@ -315,5 +373,5 @@ export default function UserCheckIn() {
         )}
       </div>
     </div>
-  );
+  )
 }

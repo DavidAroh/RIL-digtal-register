@@ -1,68 +1,76 @@
-"use client";
+'use client'
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { ArrowLeft, Filter, Download } from "lucide-react";
-import { adminLogout } from "@/lib/supabase";
-import AdminDashboard from "@/components/AdminDashboard";
-import ExistingUsers from "@/components/ExistingUsers";
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent } from '@/components/ui/card'
+import { ArrowLeft, Filter, Download } from 'lucide-react'
+import { performAdminLogout } from '@/lib/supabase'
+import AdminDashboard from '@/components/AdminDashboard'
+import ExistingUsers from '@/components/ExistingUsers'
 
 interface SecurityLog {
-  id: number;
-  email: string;
-  timestamp: string;
-  status: string;
-  attempts: number;
+  id: number
+  email: string
+  timestamp: string
+  status: string
+  attempts: number
 }
 
+type ViewType = 'home' | 'Users' | 'Existing'
+
 export default function SecurityLogs() {
-  const router = useRouter();
-  const [logs, setLogs] = useState<SecurityLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
-  const [existingView, setExistingView] = useState<"home" | "Existing">("home");
+  const router = useRouter()
+  const [logs, setLogs] = useState<SecurityLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [query, setQuery] = useState('')
+  const [currentView, setCurrentView] = useState<ViewType>('home')
 
   useEffect(() => {
     const fetchLogs = async () => {
-      setLoading(true);
-      // TODO: Fetch security logs from Supabase
-      setLogs([]);
-      setLoading(false);
-    };
-    fetchLogs();
-  }, []);
+      try {
+        setLoading(true)
+        // TODO: Fetch security logs from Supabase
+        setLogs([])
+      } catch (error) {
+        console.error('Failed to fetch security logs:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchLogs()
+  }, [])
 
   const filteredLogs = logs.filter((log) =>
     log.email.toLowerCase().includes(query.toLowerCase())
-  );
-  const [currentView, setCurrentView] = useState<"home" | "Users" | "user">(
-    "home"
-  );
+  )
 
-  if (currentView === "Users") {
-    return <AdminDashboard />;
+  if (currentView === 'Users') {
+    return <AdminDashboard />
   }
 
-  if (existingView === "Existing") {
-    return <ExistingUsers />;
+  if (currentView === 'Existing') {
+    return <ExistingUsers />
   }
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <div className="container mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
           <Link href="/">
-            <img src="/RIL logo.svg" alt="Logo" className="h-15 ml-4 cursor-pointer" />
+            <img
+              src="/RIL logo.svg"
+              alt="Logo"
+              className="h-15 ml-4 cursor-pointer"
+            />
           </Link>
           <div className="ml-auto flex items-center gap-3">
             <Button
               className="bg-blue-500 h-[40px] rounded-lg text-white"
-              onClick={() => setExistingView("Existing")}
+              onClick={() => setCurrentView('Existing')}
             >
               Manage Existing Users
             </Button>
@@ -73,8 +81,8 @@ export default function SecurityLogs() {
               variant="outline"
               className="h-[40px] rounded-lg"
               onClick={async () => {
-                await adminLogout();
-                router.push("/admin/login");
+                await performAdminLogout()
+                router.push('/admin/login')
               }}
             >
               Logout
@@ -86,7 +94,7 @@ export default function SecurityLogs() {
           <Button
             variant="ghost"
             className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-            onClick={() => setCurrentView("Users")}
+            onClick={() => setCurrentView('Users')}
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -114,7 +122,7 @@ export default function SecurityLogs() {
           </div>
         </div>
 
-        {/* Search + Filter + Export */}
+        {/* Search */}
         <div className="flex flex-col mb-6">
           <div className="mb-4 w-full h-[48px] rounded">
             <Input
@@ -193,5 +201,5 @@ export default function SecurityLogs() {
         </Card>
       </div>
     </div>
-  );
+  )
 }

@@ -1,52 +1,51 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Lock, Mail, Eye, EyeOff } from "lucide-react";
-import { adminLogin } from "@/lib/supabase";
+  CardTitle
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Lock, Mail, Eye, EyeOff } from 'lucide-react'
+import { performAdminLogin } from '@/lib/supabase'
 
 export default function AdminLogin() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
+    e.preventDefault()
+    setError('')
 
-    if (!email || !password) {
-      setError("Please enter both email and password");
-      return;
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password')
+      return
     }
 
-    setIsLoading(true);
+    setIsLoading(true)
 
     try {
-      await adminLogin(email, password);
-      // Redirect to admin dashboard on successful login
-      router.push("/admin");
-      router.refresh();
+      await performAdminLogin(email, password)
+      router.push('/admin')
+      router.refresh()
     } catch (err: any) {
-      console.error("Login error:", err);
-      setError(err.message || "Invalid email or password");
+      console.error('Login error:', err)
+      setError(err.message || 'Invalid email or password')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex items-center justify-center p-4">
@@ -93,7 +92,7 @@ export default function AdminLogin() {
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"}
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
@@ -120,7 +119,7 @@ export default function AdminLogin() {
               className="w-full bg-blue-600 hover:bg-blue-700"
               disabled={isLoading}
             >
-              {isLoading ? "Signing in..." : "Sign In"}
+              {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
 
             <div className="text-center text-sm text-gray-500">
@@ -135,5 +134,5 @@ export default function AdminLogin() {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }
